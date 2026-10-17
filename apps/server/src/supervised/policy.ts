@@ -81,6 +81,17 @@ export interface SupervisedOverlays {
 
 export const NO_OVERLAYS: SupervisedOverlays = { permission_rules: [], kernel_enforcement: [] };
 
+/**
+ * Baseline kernel guard for supervised runs: a Tetragon deny-file-open policy for the copy's synthetic secret files,
+ * scoped to the run's agent container. It closes the Bash/subprocess gap that the Read-tool deny rule leaves open, so
+ * the kernel itself rejects `node`/`cat`/`grep` opening .env. KW_SUPERVISED_KERNEL_ENFORCE=0 turns it off (observe only).
+ */
+export const SUPERVISED_KERNEL_GUARD_PATHS = ["/workspace/.env", "/workspace/secrets/token.txt"];
+export function supervisedOverlays(env: NodeJS.ProcessEnv): SupervisedOverlays {
+  if (env.KW_SUPERVISED_KERNEL_ENFORCE === "0") return NO_OVERLAYS;
+  return { permission_rules: [], kernel_enforcement: [{ safeguard_id: "kw-baseline-kernel-guard", version_id: "1", paths: SUPERVISED_KERNEL_GUARD_PATHS }] };
+}
+
 /** Union of the applied kernel_enforcement paths (sorted, unique): the enforcePaths of the run's kernel observer. */
 export function overlayEnforcePaths(o: SupervisedOverlays | null | undefined): string[] {
   return [...new Set((o?.kernel_enforcement ?? []).flatMap((k) => k.paths))].sort();

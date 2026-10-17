@@ -4,12 +4,13 @@ import type { SVGProps } from "react";
  * App-shell navigation model. Every entry is a real route registered in App.tsx; nothing here links to an empty page.
  * Detail routes (/runs/:id?event=, /findings/:id, /safeguards/:id) stay deep-linkable and mark their section active.
  */
-export type NavIconName = "overview" | "findings" | "runs" | "evidence" | "ask" | "safeguards" | "settings";
+export type NavIconName = "overview" | "live" | "findings" | "runs" | "evidence" | "ask" | "safeguards" | "settings";
 
 export type NavItem = { to: string; label: string; icon: NavIconName; end: boolean; description: string };
 
 export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/overview", label: "Overview", icon: "overview", end: true, description: "Current state and next actions" },
+  { to: "/live", label: "Live session", icon: "live", end: true, description: "Give the agent a task and watch reported vs observed behavior live" },
   { to: "/findings", label: "Findings", icon: "findings", end: false, description: "Discrepancies between reported and observed behavior" },
   { to: "/runs", label: "Agent Runs", icon: "runs", end: false, description: "Captured coding-agent sessions and their events" },
   { to: "/evidence", label: "Evidence Explorer", icon: "evidence", end: false, description: "Observed events and evidence records" },
@@ -88,6 +89,7 @@ export function resetSectionMemory() {
 // ---------------------------------------------------------------------------------------------------------------
 const NAV_PATHS: Record<NavIconName, string> = {
   overview: "M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z",
+  live: "M1.5 8h2.8l1.7-4.5 3.2 9 1.8-4.5h3.5",
   findings: "M8 2.5l6 11H2l6-11zM8 6.5v3.2M8 11.6v.1",
   runs: "M2.5 3h11v10h-11zM5 6.5l2 1.5-2 1.5M8.5 10h2.5",
   evidence: "M7 12a5 5 0 100-10 5 5 0 000 10zM10.6 10.6l3.4 3.4M5 7h4M7 5v4",

@@ -53,10 +53,12 @@ describe("api query parsing", () => {
     expect(() => RunsQuery.parse({ has_findings: "yes" })).toThrow();
   });
   it("has a contract entry per route", () => {
-    // 32 base routes (incl. Ask Witness scopes) + Addendum C additions (findingGraphSummary, findingBrief). One entry per route key.
+    // 32 base routes (incl. Ask Witness scopes) + Addendum C additions (findingGraphSummary, findingBrief) + live feed (runLive). One entry per route key.
     expect(Object.keys(API_CONTRACT).sort()).toEqual(Object.keys(API_ROUTES).sort());
     expect(Object.keys(API_CONTRACT)).toContain("findingBrief");
-    expect(Object.keys(API_CONTRACT).length).toBeGreaterThanOrEqual(33);
+    expect(Object.keys(API_CONTRACT)).toContain("runLive");
+    expect(API_CONTRACT.runLive.path).toBe("/api/runs/:id/live");
+    expect(Object.keys(API_CONTRACT).length).toBeGreaterThanOrEqual(34);
   });
 });
 

@@ -30,8 +30,8 @@ import { getRunDetail } from "../repo/runs";
 import { checkHarness, DEFAULT_MODEL, type HarnessCheck } from "../verification/harness";
 import { readBasePolicy } from "../verification/policy";
 import { buildSupervisedBundle, type Canary } from "./ingest";
-import { buildSupervisedPolicy } from "./policy";
-import { loadTetragonApi, prepareTetragon, type KernelHarnessOptions, type TetragonApi } from "../observers";
+import { buildSupervisedPolicy, overlayEnforcePaths, supervisedOverlays } from "./policy";
+import { enforcementPolicyName, loadTetragonApi, prepareTetragon, type KernelHarnessOptions, type TetragonApi } from "../observers";
 import {
   getSupervised,
   getSupervisedByRequest,
@@ -43,6 +43,7 @@ import {
   updateSupervised,
 } from "./repo";
 import { BROKER_IMAGE, dockerSupervisedExecutor, type SupervisedCapture, type SupervisedExecutor } from "./runner";
+import { liveAgentChunk, liveAgentContainer, liveFinish, liveKernel, liveStart } from "./live-feed";
 
 export const SUPERVISED_MAX_TURNS = 12;
 export const SUPERVISED_TIMEOUT_MS = 8 * 60_000;
@@ -115,6 +116,11 @@ function manifestSha(files: Array<{ rel_path: string; bytes: Buffer }>): string 
   );
 }
 
+/** Tetragon's VM-wide JSON export (host side), tailed by the live feed. */
+function liveExportFile(repoRoot: string): string {
+  return path.join(process.env.KW_TETRAGON_DATA_DIR ?? path.join(repoRoot, "data", "observer", "tetragon"), "export", "tetragon.log");
+}
+
 export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps = {}): SupervisedService {
   const executor = deps.executor ?? dockerSupervisedExecutor;
   const check = deps.checkHarness ?? supervisedHarnessChecks;
@@ -132,13 +138,22 @@ export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps
   }
 
   function ingest(run: Run, stored: StoredCapture, artifacts: Record<string, string>) {
-    const policy = buildSupervisedPolicy(readBasePolicy(ctx.paths.dockerDir));
+    const policy = buildSupervisedPolicy(readBasePolicy(ctx.paths.dockerDir), supervisedOverlays(ctx.env));
     const out = buildSupervisedBundle({ run, policy: policy.version, capture: stored.capture, canaries: stored.canaries, artifacts });
     const result = persistRunBundle(ctx.db, out.bundle, { redaction: { knownSecrets: stored.canaries.map((c) => c.value) } });
     return { out, result };
   }
 
   async function execute(runId: string, plan: { files: Array<{ rel_path: string; bytes: Buffer }>; canaries: Canary[]; policyJson: string; task: string; model: string }): Promise<void> {
+    await liveStart(runId, { exportFile: liveExportFile(ctx.paths.repoRoot) });
+    try {
+      await executeInner(runId, plan);
+    } finally {
+      liveFinish(runId);
+    }
+  }
+
+  async function executeInner(runId: string, plan: { files: Array<{ rel_path: string; bytes: Buffer }>; canaries: Canary[]; policyJson: string; task: string; model: string }): Promise<void> {
     let row = getSupervised(ctx.db, runId)!;
     const checks = await check(ctx.paths.claudeTokenFile);
     const failed = checks.filter((c) => !c.ok);
@@ -153,9 +168,10 @@ export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps
     if (deps.kernel !== false && (deps.kernel !== undefined || !deps.executor) && ctx.env.KW_KERNEL_OBSERVER !== "0") {
       const api = (deps.kernel && deps.kernel.api) || (await loadTetragonApi().catch(() => null));
       const ready = api ? await prepareTetragon(api) : ({ ok: false, reason: "@kw/observer-tetragon could not be loaded" } as const);
-      if (api && ready.ok) kernel = { api, health: ready.health, run: { obsRunId: runId, enforcePaths: [], policyName: `kw-sr-${runId}` } };
+      if (api && ready.ok) kernel = { api, health: ready.health, run: { obsRunId: runId, enforcePaths: overlayEnforcePaths(supervisedOverlays(ctx.env)), policyName: enforcementPolicyName(runId) } };
       else kernelUnavailable = ready.ok ? "unknown" : ready.reason;
     } else kernelUnavailable = ctx.env.KW_KERNEL_OBSERVER === "0" ? "disabled (KW_KERNEL_OBSERVER=0)" : "not attached (injected executor without a kernel observer)";
+    liveKernel(runId, !!kernel, kernel ? (kernel.run.enforcePaths.length ? `Tetragon attached; kernel blocks opening ${kernel.run.enforcePaths.join(", ")}` : "Tetragon attached to the agent container") : `Kernel observer unavailable: ${kernelUnavailable ?? "unknown"}`);
     row = { ...row, stage: "agent_running" };
     updateSupervised(ctx.db, row);
 
@@ -172,7 +188,10 @@ export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps
       repoRoot: ctx.paths.repoRoot,
       tokenFile: ctx.paths.claudeTokenFile,
       kernel,
+      onAgentOutput: (chunk) => liveAgentChunk(runId, chunk),
+      onAgentContainer: (name) => liveAgentContainer(runId, name),
     });
+    liveFinish(runId);
     // Observer ready but the runner recorded no observation (harness failed before/while starting the agent): say so,
     // rather than the generic "not attached".
     const noObs = kernel ? `kernel observer was ready but recorded no observation for this run${capture.error ? ` (harness error: ${capture.error})` : ""}` : kernelUnavailable;
@@ -256,7 +275,7 @@ export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps
       const snap = await ws.snapshot(workspace.id);
       const files = snap.files.map((f) => ({ rel_path: f.rel_path, bytes: Buffer.from(f.bytes) }));
       const canaries = plantCanaries(files, mkCanary);
-      const policy = buildSupervisedPolicy(readBasePolicy(ctx.paths.dockerDir));
+      const policy = buildSupervisedPolicy(readBasePolicy(ctx.paths.dockerDir), supervisedOverlays(ctx.env));
       const model = body.model ?? (ctx.env.KW_SUPERVISED_MODEL?.trim() || DEFAULT_MODEL);
       // `task` (raw) goes only to the executor in memory; everything stored or returned uses `storedTask` (ISSUE 3).
       const task = body.task.trim();

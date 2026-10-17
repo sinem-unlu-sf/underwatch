@@ -5,6 +5,7 @@ import { EvidenceExplorerPage } from "./pages/EvidenceExplorerPage";
 import { FindingDetailPage } from "./pages/FindingDetailPage";
 import { FindingsPage } from "./pages/FindingsPage";
 import { LandingPage } from "./pages/LandingPage";
+import { LivePage } from "./pages/LivePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
@@ -25,6 +26,7 @@ export function App() {
       <Route index element={<LandingPage />} />
       <Route element={<Layout />}>
         <Route path="overview" element={<OverviewPage />} />
+        <Route path="live" element={<LivePage />} />
         <Route path="runs" element={<RunsPage />} />
         <Route path="runs/:id" element={<RunDetailPage />} />
         <Route path="findings" element={<FindingsPage />} />

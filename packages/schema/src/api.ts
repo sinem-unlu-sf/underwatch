@@ -63,6 +63,7 @@ import {
   WorkspaceResponse,
   WorkspacesResponse,
 } from "./workspaces";
+import { LiveFeedQuery, LiveFeedResponse } from "./live";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Routes. Server registers API_ROUTES (Fastify ":param" syntax); clients build URLs with apiPaths.
@@ -75,6 +76,8 @@ export const API_ROUTES = {
   run: "/api/runs/:id",
   runEvents: "/api/runs/:id/events",
   runFindings: "/api/runs/:id/findings",
+  /** Live feed of a supervised run in progress (in-memory, best-effort display stream; see live.ts). */
+  runLive: "/api/runs/:id/live",
   findings: "/api/findings",
   finding: "/api/findings/:id",
   findingStatus: "/api/findings/:id/status",
@@ -124,6 +127,7 @@ export const apiPaths = {
   run: (id: string) => `/api/runs/${enc(id)}`,
   runEvents: (id: string) => `/api/runs/${enc(id)}/events`,
   runFindings: (id: string) => `/api/runs/${enc(id)}/findings`,
+  runLive: (id: string) => `/api/runs/${enc(id)}/live`,
   findings: () => API_ROUTES.findings,
   finding: (id: string) => `/api/findings/${enc(id)}`,
   findingStatus: (id: string) => `/api/findings/${enc(id)}/status`,
@@ -569,6 +573,7 @@ export const API_CONTRACT = {
   run: { method: "GET", path: API_ROUTES.run, params: IdParams, response: RunDetailResponse },
   runEvents: { method: "GET", path: API_ROUTES.runEvents, params: IdParams, query: RunEventsQuery, response: RunEventsResponse },
   runFindings: { method: "GET", path: API_ROUTES.runFindings, params: IdParams, response: RunFindingsResponse },
+  runLive: { method: "GET", path: API_ROUTES.runLive, params: IdParams, query: LiveFeedQuery, response: LiveFeedResponse },
   findings: { method: "GET", path: API_ROUTES.findings, query: FindingsQuery, response: FindingsResponse },
   finding: { method: "GET", path: API_ROUTES.finding, params: IdParams, response: FindingDetailResponse },
   findingStatus: {

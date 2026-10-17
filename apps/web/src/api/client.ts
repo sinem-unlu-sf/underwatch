@@ -12,6 +12,7 @@ import {
   RunFindingsResponse,
   RunsResponse,
   StartSupervisedRunResponse,
+  LiveFeedResponse,
   SafeguardsResponse,
   SettingsStatusResponse,
   AskWitnessResponse,
@@ -47,6 +48,7 @@ import {
   type StartSupervisedRunBody,
 } from "@kw/schema";
 import { authHeaders } from "./auth";
+import { livePath } from "./live";
 
 /** Structural subset of a Zod schema; the web package does not depend on zod directly. */
 interface ResponseSchema<T> {
@@ -186,6 +188,8 @@ export const api = {
   runEvents: (id: string, q: RunEventsQueryInput) =>
     request(apiPaths.runEvents(id) + buildQuery(q as Record<string, QueryValue>), RunEventsResponse),
   runFindings: (id: string) => request(apiPaths.runFindings(id), RunFindingsResponse),
+  /** Live feed of a supervised run: items/alerts with seq > after (see api/live.ts). */
+  runLive: (id: string, after: number) => request(livePath(id, after), LiveFeedResponse),
   findings: (q: FindingsQueryInput) => request(apiPaths.findings() + buildQuery(q as Record<string, QueryValue>), FindingsResponse),
   finding: (id: string) => request(apiPaths.finding(id), FindingDetailResponse),
   updateFindingStatus: (id: string, body: FindingStatusUpdateBody) =>

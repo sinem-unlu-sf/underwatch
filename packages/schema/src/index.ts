@@ -9,6 +9,7 @@ export * from "./askwitness";
 export * from "./safeguards";
 export * from "./verification";
 export * from "./supervised";
+export * from "./live";
 export * from "./outcomes";
 export * from "./graph";
 export * from "./brief";

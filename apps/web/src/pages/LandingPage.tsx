@@ -80,7 +80,6 @@ function Shot({ shot, priority = false, className = "" }: { shot: LandingShot; p
           className="block h-auto w-full max-w-full"
         />
       </div>
-      <figcaption className="mt-3 text-[12px] text-text-tertiary">{shot.caption}</figcaption>
     </figure>
   );
 }

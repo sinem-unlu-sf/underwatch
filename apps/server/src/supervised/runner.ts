@@ -34,6 +34,9 @@ export interface SupervisedPlan {
   tokenFile: string;
   /** Kernel observer (Tetragon) for this run (same gate -> attach -> release -> stop flow as verification runs). */
   kernel?: KernelHarnessOptions | null;
+  /** Live-feed taps (display only): agent stdout chunks as they arrive, and the agent container's name. */
+  onAgentOutput?: (chunk: string) => void;
+  onAgentContainer?: (name: string) => void;
 }
 
 export interface ManifestEntry {
@@ -80,7 +83,7 @@ interface Cmd {
   timedOut: boolean;
 }
 
-function run(cmd: string, args: string[], opts: { input?: Buffer; env?: NodeJS.ProcessEnv; timeoutMs?: number; onTimeout?: () => void } = {}): Promise<Cmd> {
+function run(cmd: string, args: string[], opts: { input?: Buffer; env?: NodeJS.ProcessEnv; timeoutMs?: number; onTimeout?: () => void; onStdout?: (chunk: string) => void } = {}): Promise<Cmd> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { env: opts.env ?? process.env, stdio: ["pipe", "pipe", "pipe"] });
     const out: Buffer[] = [];
@@ -94,7 +97,16 @@ function run(cmd: string, args: string[], opts: { input?: Buffer; env?: NodeJS.P
         child.kill("SIGKILL");
       }, opts.timeoutMs);
     }
-    child.stdout.on("data", (c: Buffer) => out.push(c));
+    child.stdout.on("data", (c: Buffer) => {
+      out.push(c);
+      if (opts.onStdout) {
+        try {
+          opts.onStdout(c.toString("utf8"));
+        } catch {
+          /* the live feed is best-effort display only */
+        }
+      }
+    });
     child.stderr.on("data", (c: Buffer) => err.push(c));
     child.on("error", (e) => {
       if (timer) clearTimeout(timer);
@@ -296,7 +308,8 @@ export const dockerSupervisedExecutor: SupervisedExecutor = async (plan) => {
       "-e", `ANTHROPIC_BASE_URL=http://${n.broker}:8080`, "-e", "CLAUDE_CODE_OAUTH_TOKEN",
       "-e", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "-e", "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
     ];
-    const agentOpts = { env, timeoutMs: plan.timeoutMs, onTimeout: () => void docker(["kill", n.agent], { timeoutMs: 15_000 }) };
+    const agentOpts = { env, timeoutMs: plan.timeoutMs, onTimeout: () => void docker(["kill", n.agent], { timeoutMs: 15_000 }), onStdout: plan.onAgentOutput };
+    plan.onAgentContainer?.(n.agent);
     let agent: Cmd;
     if (plan.kernel) {
       // Same paused start as verification runs (observers/tetragon-run.ts): create with the image entrypoint held
