@@ -39,6 +39,8 @@ export const SupervisedArtifactKind = z.enum([
   "kernel_events",
   /** Tetragon capture stats, coverage fragment, start gate and observer health. */
   "kernel_stats",
+  /** P11 per-run network guard + isolation self-test result (observed inside the agent container before the start gate opened). */
+  "isolation_selftest",
 ]);
 export type SupervisedArtifactKind = z.infer<typeof SupervisedArtifactKind>;
 

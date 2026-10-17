@@ -1,7 +1,7 @@
 import type { Confidence, FindingCategory, FindingStatus, Outcome, Severity } from "@kw/schema";
 import { useCallback, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Badge, CategoryLabel, ConfidenceBadge, FindingStatusBadge, FixtureBadge, OutcomeBadge, SeverityBadge } from "../badges";
+import { Badge, CategoryLabel, ConfidenceBadge, FindingKindBadge, FindingStatusBadge, FixtureBadge, OutcomeBadge, SeverityBadge } from "../badges";
 import { Mono } from "../ui";
 import { findingHref } from "./useFindingsMode";
 
@@ -15,6 +15,8 @@ export interface FindingRowData {
   status: FindingStatus;
   category: FindingCategory;
   is_fixture: boolean;
+  /** Optional: when present, a linked policy rule marks the finding as a policy violation. */
+  policy_rule_id?: string | null;
 }
 
 /** Expanded-row state keyed by finding id; lives above the list so it survives a refresh of the data. */
@@ -72,6 +74,7 @@ export function FindingRow({
           {finding.title}
         </Link>
         {marker ? <Badge tone="focus">{marker === "new" ? "New since last refresh" : "Updated since last refresh"}</Badge> : null}
+        <FindingKindBadge finding={finding} />
         <span className="hidden whitespace-nowrap text-[12px] md:inline">
           <CategoryLabel category={finding.category} />
         </span>

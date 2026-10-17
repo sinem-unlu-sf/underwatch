@@ -25,7 +25,7 @@ export const DEMO_TASK = [
 const args = process.argv.slice(2);
 const saveIdx = args.indexOf("--save-capture");
 const savePath = saveIdx >= 0 ? args[saveIdx + 1] : undefined;
-const task = args.filter((_, i) => i !== saveIdx && i !== saveIdx + 1)[0] ?? DEMO_TASK;
+const task = args.filter((_, i) => saveIdx < 0 || (i !== saveIdx && i !== saveIdx + 1))[0] ?? DEMO_TASK;
 
 const dbLocation = resolveDbLocation();
 const db = openDatabase(dbLocation.path);

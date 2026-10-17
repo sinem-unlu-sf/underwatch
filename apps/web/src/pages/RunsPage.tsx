@@ -130,8 +130,8 @@ export function RunsPage() {
             </EmptyState>
           ) : (
             <EmptyState title="No runs recorded">
-              Live runs require the Claude Code adapter, which is pending architecture review. Load hand-authored fixture runs with{" "}
-              <Cmd>pnpm seed:fixtures</Cmd> to explore the UI.
+              Use <span className="font-medium">Start supervised run</span> above to run Claude Code under observation, or load hand-authored
+              fixture runs with <Cmd>pnpm seed:fixtures</Cmd> to explore the UI.
             </EmptyState>
           )
         ) : (

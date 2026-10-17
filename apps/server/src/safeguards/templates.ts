@@ -222,10 +222,10 @@ export function buildTemplateProposals(f: FindingFacts): { proposals: TemplatePr
     const bashRoute = f.tools.includes("Bash") || f.processes.length > 0;
     proposals.push({
       type: "permission_rule",
-      title: `Deny ${tool} on ${concrete.join(", ")} in Kernel Witness supervised runs`.slice(0, 200),
+      title: `Deny ${tool} on ${concrete.join(", ")} in Kernel Witness verification runs`.slice(0, 200),
       content: JSON.stringify({ permissions: { deny } }, null, 2),
       target: { kind: "supervised_run_policy" },
-      application_mechanism: "permissions.deny in Kernel Witness's read-only managed policy for supervised runs (not your repository or your own Claude Code settings).",
+      application_mechanism: "permissions.deny in Kernel Witness's read-only managed policy for this safeguard's verification runs (not your repository or your own Claude Code settings).",
       rationale:
         `${ruleLabel(f)} was violated in finding ${f.finding.id}.${channelSentence(f)}` +
         (action === "file_read" && bashRoute

@@ -36,6 +36,7 @@ import {
 import type { ServerContext } from "../context";
 import { stmt } from "../db/codec";
 import { transaction } from "../db/connection";
+import type { FindingStatus } from "@kw/schema";
 import { ApiHttpError, notFound } from "../errors";
 import { getFindingDetail } from "../repo/findings";
 import type { ApplyChangeResult, SafeguardService, SupervisedPolicyRule } from "../services/types";
@@ -164,6 +165,15 @@ function validateContent(type: SafeguardType, content: string, safeguardId: stri
   }
 }
 
+/** Warning flag for proposals whose source finding a reviewer has not confirmed (proposing is still allowed). */
+export function proposalBasis(status: FindingStatus): { finding_confirmed: boolean; warnings: string[] } {
+  const confirmed = status === "confirmed" || status === "resolved";
+  return {
+    finding_confirmed: confirmed,
+    warnings: confirmed ? [] : [`The source finding is "${status}", not confirmed by a reviewer. Review its evidence before approving these safeguards.`],
+  };
+}
+
 export function createSafeguardService(ctx: ServerContext): SafeguardService {
   const db = ctx.db;
   const nowIso = () => ctx.now().toISOString();
@@ -235,12 +245,19 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
     }
     const ref = rec.result_ref as { safeguard_ids: string[]; generation: Generation; finding_id: string };
     if (ref.finding_id !== findingId) throw new ApiHttpError("conflict", "client_request_id was already used for a different finding.");
-    return { items: await Promise.all(ref.safeguard_ids.map(get)), generation: ref.generation, replayed: true };
+    return { items: await Promise.all(ref.safeguard_ids.map(get)), generation: ref.generation, replayed: true, ...proposalBasis(getFindingDetail(db, findingId).finding.status) };
   }
 
   async function doPropose(findingId: string, body: SafeguardProposalBody, actor: string, fingerprint: string): Promise<SafeguardProposalResponse> {
     const detail = getFindingDetail(db, findingId); // 404 for unknown findings
     const finding = detail.finding;
+    // FR9-01 evidence/status gate (PRD-COVERAGE 4a #5).
+    if (finding.status === "dismissed") {
+      throw new ApiHttpError("invalid_transition", "This finding was dismissed; safeguards cannot be proposed from a dismissed finding. Reopen it first.");
+    }
+    if (detail.related_events.length === 0 && detail.evidence.length === 0) {
+      throw new ApiHttpError("validation_error", "This finding has no related events or evidence, so there is nothing to base a safeguard on.");
+    }
 
     if (body.investigation_id) {
       const inv = stmt(db, "SELECT finding_id FROM investigations WHERE id = ?").get(body.investigation_id);
@@ -378,7 +395,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
       return true;
     });
     void committed;
-    return { items: await Promise.all(ids.map(get)), generation, replayed: false };
+    return { items: await Promise.all(ids.map(get)), generation, replayed: false, ...proposalBasis(finding.status) };
   }
 
   return {

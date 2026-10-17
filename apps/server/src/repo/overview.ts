@@ -1,7 +1,7 @@
 import { OVERVIEW_ITEM_LIMIT, type ComponentStatus, type EntityTotals, type OverviewResponse } from "@kw/schema";
 import { stmt } from "../db/codec";
 import type { Db } from "../db/connection";
-import { dataMode, observationComponents, worstStatus } from "../status";
+import { dataMode, observationComponents, overallStatus } from "../status";
 import { queryFindingList } from "./findings";
 import { RECENT_RUNS_ORDER, queryRunList } from "./runs";
 import { querySafeguardList, recentCompletedVerifications } from "./safeguards";
@@ -54,7 +54,7 @@ export function getOverview(db: Db, env: NodeJS.ProcessEnv, neo4j?: ComponentSta
     ),
     safeguards_awaiting_approval: toCounted(querySafeguardList(db, { where: "WHERE sg.approval_status = 'proposed'", limit })),
     recent_verification_results: toCounted(recentCompletedVerifications(db, limit)),
-    observation_health: { overall: worstStatus(components.map((c) => c.status)), components },
+    observation_health: { overall: overallStatus(components.map((c) => c.status)), components },
   };
 }
 

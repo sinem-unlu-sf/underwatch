@@ -63,25 +63,69 @@ export interface SupervisedPolicy {
   managedJson: string;
   managedSha256: string;
   version: PolicyVersion;
+  /** Applied safeguards merged into this policy (empty lists when none). */
+  overlays: SupervisedOverlays;
+}
+
+/**
+ * NOT YET WIRED: supervised/service.ts calls buildSupervisedPolicy() without overlays, so applied safeguards do not
+ * affect supervised runs in this build (they apply to verification runs). Intended design (FR9-08): permission_rule deny/ask strings are
+ * merged into the run's managed settings; kernel_enforcement paths are loaded as a Tetragon deny-file-open policy
+ * scoped to that run's agent container (the run is refused if they cannot be put in force). Recorded in the run's
+ * PolicyVersion (content hash, description) so each run shows which safeguards were in force.
+ */
+export interface SupervisedOverlays {
+  permission_rules: Array<{ safeguard_id: string; version_id: string; deny: string[]; ask: string[] }>;
+  kernel_enforcement: Array<{ safeguard_id: string; version_id: string; paths: string[] }>;
+}
+
+export const NO_OVERLAYS: SupervisedOverlays = { permission_rules: [], kernel_enforcement: [] };
+
+/** Union of the applied kernel_enforcement paths (sorted, unique): the enforcePaths of the run's kernel observer. */
+export function overlayEnforcePaths(o: SupervisedOverlays | null | undefined): string[] {
+  return [...new Set((o?.kernel_enforcement ?? []).flatMap((k) => k.paths))].sort();
+}
+
+/** One line per applied safeguard in force, for the PolicyVersion description and the run's limitations. */
+export function describeOverlays(o: SupervisedOverlays): string[] {
+  return [
+    ...o.permission_rules.map(
+      (r) => `permission_rule ${r.safeguard_id} (version ${r.version_id}): managed settings permissions.deny ${JSON.stringify(r.deny)}${r.ask.length ? `, permissions.ask ${JSON.stringify(r.ask)}` : ""}`,
+    ),
+    ...o.kernel_enforcement.map(
+      (k) => `kernel_enforcement ${k.safeguard_id} (version ${k.version_id}): Tetragon deny-file-open ${JSON.stringify(k.paths)} scoped to this run's agent container`,
+    ),
+  ];
 }
 
 /** Fixed so identical policy content always yields an identical (immutable) PolicyVersion row. */
 const POLICY_CREATED_AT = "2026-10-17T00:00:00.000Z";
 
-export function buildSupervisedPolicy(base: Record<string, unknown>): SupervisedPolicy {
+export function buildSupervisedPolicy(base: Record<string, unknown>, overlays: SupervisedOverlays = NO_OVERLAYS): SupervisedPolicy {
   const settings = structuredClone(base);
   const perms = { ...((settings.permissions as Record<string, unknown> | undefined) ?? {}) };
   const uniq = (xs: unknown[]) => [...new Set(xs.filter((x): x is string => typeof x === "string"))];
+  const ovDeny = overlays.permission_rules.flatMap((r) => r.deny);
+  const ovAsk = overlays.permission_rules.flatMap((r) => r.ask);
   perms.allow = uniq([...((perms.allow as unknown[]) ?? []), ...SUPERVISED_ALLOW]);
-  perms.deny = uniq([...((perms.deny as unknown[]) ?? []), ...SUPERVISED_DENY]);
+  perms.deny = uniq([...((perms.deny as unknown[]) ?? []), ...SUPERVISED_DENY, ...ovDeny]);
+  if (ovAsk.length > 0) perms.ask = uniq([...((perms.ask as unknown[]) ?? []), ...ovAsk]);
   settings.permissions = perms;
   const managedJson = `${JSON.stringify(settings, null, 2)}\n`;
   const managedSha256 = sha256Hex(managedJson);
-  const content = JSON.stringify({ rules: SUPERVISED_RULES, managed_settings_sha256: managedSha256 });
+  const hasOverlays = overlays.permission_rules.length + overlays.kernel_enforcement.length > 0;
+  // Without overlays the content (and so the PolicyVersion id) is exactly what it was before overlays existed.
+  const content = JSON.stringify({
+    rules: SUPERVISED_RULES,
+    managed_settings_sha256: managedSha256,
+    ...(hasOverlays ? { applied_safeguards: { permission_rules: overlays.permission_rules, kernel_enforcement: overlays.kernel_enforcement, enforce_paths: overlayEnforcePaths(overlays) } } : {}),
+  });
   const contentSha = sha256Hex(content);
+  const inForce = describeOverlays(overlays);
   return {
     managedJson,
     managedSha256,
+    overlays,
     version: {
       id: makeStableId("policy_version", "kw-supervised", contentSha),
       is_fixture: false,
@@ -89,8 +133,9 @@ export function buildSupervisedPolicy(base: Record<string, unknown>): Supervised
       version: `kw-supervised@${contentSha.slice(0, 12)}`,
       name: "Kernel Witness supervised policy",
       description:
-        "Policy for live supervised runs: Claude Code managed settings (read-only) with Read/Edit/Write/Bash allowed in the disposable workspace, Read denied for .env and secrets/, .claude/ writes denied, internal-only network (egress default-deny is enforced by the network, not modeled as a rule). Read deny rules do not stop interpreter subprocesses (no OS sandbox in the container).",
-      source_reference: "docker/agent/policy/managed-settings.json + apps/server/src/supervised/policy.ts",
+        "Policy for live supervised runs: Claude Code managed settings (read-only) with Read/Edit/Write/Bash allowed in the disposable workspace, Read denied for .env and secrets/, .claude/ writes denied, internal-only network (egress default-deny is enforced by the network, not modeled as a rule). Read deny rules do not stop interpreter subprocesses (no OS sandbox in the container)." +
+        (inForce.length ? ` Applied safeguards in force for runs under this version: ${inForce.join("; ")}.` : ""),
+      source_reference: `docker/agent/policy/managed-settings.json + apps/server/src/supervised/policy.ts${hasOverlays ? ` + applied safeguards ${[...overlays.permission_rules, ...overlays.kernel_enforcement].map((x) => x.safeguard_id).join(", ")}` : ""}`,
       content_sha256: contentSha,
       rules: SUPERVISED_RULES,
       created_at: POLICY_CREATED_AT,

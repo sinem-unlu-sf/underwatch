@@ -9,6 +9,7 @@ import {
   Badge,
   BasisBadge,
   CategoryLabel,
+  FindingKindBadge,
   FindingStatusBadge,
   FixtureBadge,
   OutcomeBadge,
@@ -92,6 +93,7 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
           <span className="flex items-center gap-1.5">
             <span className="label">Category</span>
             <CategoryLabel category={f.category} />
+            <FindingKindBadge finding={f} />
           </span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-fg-2">
@@ -125,13 +127,6 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
             <p className="whitespace-pre-wrap text-fg-0">{f.description || <span className="text-fg-2">No description recorded.</span>}</p>
           </Panel>
 
-          <AskWitnessPanel
-            finding={{ id: f.id, title: f.title, severity: f.severity, is_fixture: f.is_fixture }}
-            onCreateSafeguard={requestSafeguard}
-          />
-
-          <FindingSafeguardsPanel findingId={f.id} safeguards={data.safeguards} request={createReq} onOpenEvidence={setOpenEvidence} />
-
           <Panel title="Reported vs observed" aside={<span className="text-[11px]">{data.related_events.length} related events</span>} bodyClassName="">
             <div className="grid md:grid-cols-2">
               <Lane
@@ -161,6 +156,17 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
               </div>
             ) : null}
           </Panel>
+
+          <Panel title="Recommended next step">
+            <p className="whitespace-pre-wrap text-fg-0">{f.recommended_next_step || <span className="text-fg-2">None recorded.</span>}</p>
+          </Panel>
+
+          <AskWitnessPanel
+            finding={{ id: f.id, title: f.title, severity: f.severity, is_fixture: f.is_fixture }}
+            onCreateSafeguard={requestSafeguard}
+          />
+
+          <FindingSafeguardsPanel findingId={f.id} safeguards={data.safeguards} request={createReq} onOpenEvidence={setOpenEvidence} />
 
           <Panel title={`Evidence references (${data.evidence.length})`} bodyClassName="">
             {data.evidence.length === 0 ? (
@@ -229,24 +235,19 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
 
           <EvidenceGraphPanel findingId={f.id} onOpenEvidence={setOpenEvidence} />
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <Panel title="Missing information">
-              {f.missing_information.length === 0 ? (
-                <span className="text-fg-2">The finding records no evidence gaps.</span>
-              ) : (
-                <ul className="space-y-1">
-                  {f.missing_information.map((m, i) => (
-                    <li key={i} className="hatch rounded-[2px] px-2 py-1 text-fg-1">
-                      {m}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-            <Panel title="Recommended next step">
-              <p className="whitespace-pre-wrap text-fg-0">{f.recommended_next_step || <span className="text-fg-2">None recorded.</span>}</p>
-            </Panel>
-          </div>
+          <Panel title="Missing information">
+            {f.missing_information.length === 0 ? (
+              <span className="text-fg-2">The finding records no evidence gaps.</span>
+            ) : (
+              <ul className="space-y-1">
+                {f.missing_information.map((m, i) => (
+                  <li key={i} className="hatch rounded-[2px] px-2 py-1 text-fg-1">
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
           <PolicyPanel policy={data.policy} highlightRuleId={f.policy_rule_id} title={f.policy_rule_id ? `Relevant policy · rule ${f.policy_rule_id}` : "Relevant policy"} />
         </div>

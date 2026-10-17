@@ -209,11 +209,11 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
     cannot: [
       "Does not stop arbitrary subprocesses (e.g. python3 open('.env'), grep -r) unless the OS sandbox is enabled; the native sandbox cannot start inside KW's unprivileged Docker agent container.",
       "Bash deny rules match command text only (not /bin/rm, sh -c '...', reordered flags); Claude Code documents them as not a security boundary.",
-      "Applies only to Kernel Witness supervised runs; it does not change your own Claude Code settings on this Mac.",
+      "Applies only to Kernel Witness verification runs of this safeguard (supervised runs do not load applied safeguards in this build); it does not change your own Claude Code settings on this Mac.",
       "Read-rule denials are rejected before hooks run; they are visible only in result.permission_denials / PostToolBatch / the transcript.",
     ],
     apply_target: "supervised_run_policy",
-    apply_description: "After explicit approval, the rule is added to Kernel Witness's managed policy for supervised runs (mounted read-only at /etc/claude-code in the agent container); nothing in your repository changes.",
+    apply_description: "After explicit approval, the rule is recorded as applied in Kernel Witness and is put in the managed policy (mounted read-only at /etc/claude-code in the agent container) of this safeguard's verification runs. In this build, Start supervised run does not load applied safeguards; nothing in your repository or your own Claude Code settings changes.",
     test_description: "A controlled Claude Code run in the disposable kw-agent container with the rule in its managed policy; restricted and legitimate cases are judged from recorded permission_denials, tool results and hook events.",
     availability: { status: "available", requires: VERIFY_REQUIRES },
   },
@@ -276,7 +276,7 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
       "Depends on the Docker Desktop kernel keeping BTF, BPF-LSM and override support (reported by the observer health check).",
     ],
     apply_target: "supervised_run_policy",
-    apply_description: "After explicit approval, Kernel Witness loads a Tetragon deny-file-open policy scoped to the disposable agent container's pid namespace for the duration of a run, and removes it afterwards; nothing in your repository or on your Mac changes.",
+    apply_description: "After explicit approval, the policy is recorded as applied in Kernel Witness; during this safeguard's verification runs Kernel Witness loads a Tetragon deny-file-open policy scoped to the disposable agent container's pid namespace and removes it afterwards. In this build, Start supervised run does not load applied safeguards; nothing in your repository or on your Mac changes.",
     test_description: "A controlled Claude Code run in the disposable kw-agent container with the policy loaded before the agent starts; the restricted case is judged from Tetragon's kernel events (blocked / succeeded opens) plus the host-side records.",
     availability: { status: "available", requires: [...VERIFY_REQUIRES, "kw-tetragon observer (Tetragon v1.7.0) healthy with BPF-LSM support"] },
   },
@@ -387,6 +387,14 @@ export const SafeguardProposalResponse = z.object({
     detail: z.string(),
   }),
   replayed: z.boolean(),
+  /**
+   * FR9-01 gate: false when the source finding is not (yet) confirmed by a reviewer (new / under_review). Proposing is
+   * still allowed for those (they have related evidence); dismissed findings and findings with no related events or
+   * evidence are rejected with a 4xx. Optional for older clients/records.
+   */
+  finding_confirmed: z.boolean().optional(),
+  /** Human-readable warnings about the proposal's basis (e.g. the finding is not confirmed). */
+  warnings: z.array(z.string()).optional(),
 });
 export type SafeguardProposalResponse = z.infer<typeof SafeguardProposalResponse>;
 

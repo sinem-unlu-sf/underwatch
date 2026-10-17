@@ -1,6 +1,6 @@
 import type { FindingListItem } from "@kw/schema";
 import { Link, useNavigate } from "react-router";
-import { CategoryLabel, ConfidenceBadge, FindingStatusBadge, FixtureBadge, SeverityBadge } from "./badges";
+import { CategoryLabel, ConfidenceBadge, FindingKindBadge, FindingStatusBadge, FixtureBadge, SeverityBadge } from "./badges";
 import { Mono, Time } from "./ui";
 
 /** Severity and confidence are separate columns on purpose (PRD 6.6): high severity with low confidence is a different situation than the reverse. */
@@ -40,7 +40,10 @@ export function FindingsTable({ findings, showRun = true, onFilterTimeline }: { 
                 <Mono className="text-[11px] text-fg-2">{f.id}</Mono>
               </td>
               <td className="whitespace-nowrap">
-                <CategoryLabel category={f.category} />
+                <div className="flex flex-col items-start gap-1">
+                  <FindingKindBadge finding={f} />
+                  <CategoryLabel category={f.category} />
+                </div>
               </td>
               <td>
                 <FindingStatusBadge status={f.status} />

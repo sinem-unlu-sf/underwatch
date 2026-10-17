@@ -86,7 +86,7 @@ export function adapterStatus(db?: Db): ComponentStatus {
 /** Observer sources actually wired in this build, and where. Everything else stays "not implemented". */
 const WIRED_COLLECTORS: Partial<Record<EventSource, string>> = {
   kernel_tracer:
-    "Tetragon (eBPF) in the kw-tetragon container. Attached to safeguard verification runs only, and only when kw-tetragon is healthy; not attached to supervised runs or to sessions outside Kernel Witness.",
+    "Tetragon (eBPF) in the kw-tetragon container. Attached to supervised runs (Agent Runs > Start supervised run) and safeguard verification runs, only when kw-tetragon is healthy (otherwise the run's coverage marks kernel observation unavailable, with the reason); not attached to sessions outside Kernel Witness.",
   network_proxy:
     "Egress proxy (default-deny) and credential-broker logs, captured host-side in supervised and verification runs only.",
   git_observer: "Pre/post git snapshot of the disposable workspace copy, taken host-side in supervised runs only.",
@@ -187,6 +187,16 @@ export function worstStatus(statuses: IntegrationStatus[]): IntegrationStatus {
   return statuses.reduce<IntegrationStatus>((worst, s) => (STATUS_SEVERITY[s] > STATUS_SEVERITY[worst] ? s : worst), "connected");
 }
 
+/**
+ * Overall health of the components that exist in this build: collectors that are "not_implemented" are listed per
+ * component but do not drag the summary to "not implemented" (that read as if nothing is observed). If every
+ * component is not implemented, the summary says so.
+ */
+export function overallStatus(statuses: IntegrationStatus[]): IntegrationStatus {
+  const built = statuses.filter((s) => s !== "not_implemented");
+  return built.length === 0 ? "not_implemented" : worstStatus(built);
+}
+
 /** Components that make up "observation system health" on the overview. */
 export function observationComponents(
   env: NodeJS.ProcessEnv,
@@ -216,8 +226,10 @@ export function settingsStatus({ db, dbLocation, env, inference }: StatusContext
       status: activeLive ? "configured" : "not_configured",
       detail:
         `${totalPolicies} policy version(s) stored (${fixturePolicies} from fixtures, ${totalPolicies - fixturePolicies} live). ` +
-        (activeLive ? "" : "No live policy version exists, so no policy is active. ") +
-        "Live supervised runs use the built-in Kernel Witness policy (Claude Code managed settings + matching KW rules evaluated by @kw/analysis); policy editing in the UI is not implemented.",
+        (activeLive
+          ? ""
+          : "No supervised run has recorded a policy version yet; the built-in policy below is used as soon as one runs. ") +
+        "Built-in policy: \"Kernel Witness supervised policy\" (kw-supervised), applied to every live supervised run: Claude Code managed settings (read-only, Read denied for .env and secrets/, .claude/ writes denied) plus the matching KW rules evaluated by @kw/analysis. Policy editing in the UI is not implemented; applied safeguards are not merged into supervised runs in this build (they apply to their verification runs).",
       configured_via: null,
       active_policy_version_id: (activeLive?.id as string | undefined) ?? null,
     },

@@ -176,6 +176,7 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
         <div className="space-y-2">
           <Labeled label="Rationale">{v?.rationale || sg.intended_effect}</Labeled>
           <Labeled label="Intended effect">{v?.intended_effect ?? sg.intended_effect}</Labeled>
+          <Labeled label="Impact on legitimate workflows">{sg.legitimate_workflow_impact || <span className="text-fg-2">Not recorded.</span>}</Labeled>
           {v && v.limitations.length > 0 ? (
             <div>
               <div className="label mb-0.5">Limitations</div>
@@ -217,7 +218,7 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
           </pre>
           {v && v.target.kind !== "workspace_file" ? (
             <p className="mt-1 text-[11px] text-fg-2">
-              Target: {v.target.kind === "supervised_run_policy" ? "Kernel Witness's managed policy for supervised runs only (not your repository or your own Claude Code settings)" : "stored in Kernel Witness as a verification scenario (nothing written)"}
+              Target: {v.target.kind === "supervised_run_policy" ? "Kernel Witness verification runs and exported config only. In this build it does not change later supervised runs, your repository or your own Claude Code settings" : "stored in Kernel Witness as a verification scenario (nothing written)"}
             </p>
           ) : null}
         </div>
@@ -366,8 +367,8 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
               </p>
             ) : v.target.kind === "supervised_run_policy" ? (
               <p className="text-[12px] text-fg-1">
-                The rule is added to Kernel Witness's read-only managed policy for supervised verification runs. Nothing in your repository or your own Claude
-                Code settings changes.
+                The rule applies to Kernel Witness verification runs and exported config. In this build it is not merged into later supervised runs.
+                Nothing in your repository or your own Claude Code settings changes.
               </p>
             ) : (
               <p className="text-[12px] text-fg-1">The scenario is stored in Kernel Witness and linked to the finding. Nothing is written to any file.</p>

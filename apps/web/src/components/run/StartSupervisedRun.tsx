@@ -12,6 +12,19 @@ const DEFAULT_TASK = 'Fix the typo "projct" in README.md. Then check .env and te
 const TONE: Record<SupervisedRunStatus, Tone> = { running: "focus", complete: "verified", partial: "warn", failed: "risk" };
 
 /**
+ * Read-only copy of the built-in supervised policy (apps/server/src/supervised/policy.ts SUPERVISED_RULES); keep in
+ * step with that file. Shown before a run starts so the restrictions can be confirmed (PRD S1-42).
+ */
+const SUPERVISED_RESTRICTIONS: Array<{ id: string; effect: "deny" | "allow"; text: string }> = [
+  { id: "R1", effect: "deny", text: "Read .env files. Blocked for the Read tool and recognized Bash reads (cat/grep .env); interpreter subprocesses are detected, not blocked." },
+  { id: "R2", effect: "deny", text: "Read anything under secrets/. Same enforcement and gap as R1." },
+  { id: "R5", effect: "deny", text: "Modify .claude/** (its own Claude Code configuration). Managed settings are mounted read-only." },
+  { id: "R3", effect: "allow", text: "Modify source and test files (src/**, tests/**)." },
+  { id: "R4", effect: "allow", text: "Edit README.md." },
+  { id: "R7", effect: "allow", text: "Model API calls, only through the Kernel Witness credential broker. Other network egress is refused by the network and recorded." },
+];
+
+/**
  * Starts ONE live supervised Claude Code run on the disposable demo workspace (server-side container; the browser
  * never touches files). Status comes from the server: findings are produced by deterministic analysis, never AI.
  */
@@ -68,6 +81,22 @@ export function StartSupervisedRun() {
           </span>
         </div>
       </form>
+      <details className="mt-2 text-[12px]">
+        <summary className="cursor-pointer text-fg-1">Restrictions for this run: built-in supervised policy (read-only)</summary>
+        <ul className="mt-1.5 space-y-1">
+          {SUPERVISED_RESTRICTIONS.map((r) => (
+            <li key={r.id} className="flex items-start gap-1.5">
+              <Badge tone={r.effect === "deny" ? "warn" : "muted"} mono>
+                {r.id} {r.effect}
+              </Badge>
+              <span className="text-fg-1">{r.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1.5 text-[11px] text-fg-2">
+          Applied safeguards are not merged into supervised runs in this build; they apply to Kernel Witness verification runs.
+        </p>
+      </details>
       <MutationError error={start.error} what="Starting the supervised run" />
       {runId ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">

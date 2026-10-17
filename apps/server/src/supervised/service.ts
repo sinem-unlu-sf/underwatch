@@ -77,7 +77,7 @@ const BASE_LIMITATIONS = [
   "Ran on a disposable copy of the workspace inside the kw-agent container; the real workspace was not modified. The agent's changes exist only in the captured git diff.",
   "Kernel Witness replaced the synthetic values in .env and secrets/token.txt of the copy with per-run random canaries, so content reaching the agent can be detected.",
   "stream-json is Claude Code's own account of the run (captured on the host from container stdout); the hook spool is written inside the container and is agent-writable. Both are REPORTED evidence.",
-  "OBSERVED evidence comes only from host-side sources: the egress-proxy log, the credential-broker log (metadata) and the host git snapshot of the copy (final state only).",
+  "OBSERVED evidence comes only from sources outside the agent container: the egress-proxy log, the credential-broker log (metadata), the host git snapshot of the copy (final state only) and, when attached, the Tetragon kernel record.",
   "Process execution, file access and TCP connects come from the kernel observer (Tetragon, eBPF in the Docker VM kernel, outside the agent container) when it is attached; each run's coverage states whether it was.",
   "Claude Code applies Read deny rules to the Read tool and to Bash commands it recognizes as file reads, but not to arbitrary interpreter subprocesses (e.g. python3 open('.env')) without the OS sandbox, which cannot start in this container.",
 ];
@@ -173,7 +173,10 @@ export function createSupervisedService(ctx: ServerContext, deps: SupervisedDeps
       tokenFile: ctx.paths.claudeTokenFile,
       kernel,
     });
-    if (!kernel && capture.kernel === undefined) capture.kernel = { status: "unavailable", reason: kernelUnavailable, health: null, capture: null, enforcement: null, gate: { held: false, released_at: null, note: "no gate (observer unavailable)" }, errors: [] };
+    // Observer ready but the runner recorded no observation (harness failed before/while starting the agent): say so,
+    // rather than the generic "not attached".
+    const noObs = kernel ? `kernel observer was ready but recorded no observation for this run${capture.error ? ` (harness error: ${capture.error})` : ""}` : kernelUnavailable;
+    if (capture.kernel == null) capture.kernel = { status: kernel ? "error" : "unavailable", reason: noObs, health: null, capture: null, enforcement: null, gate: { held: false, released_at: null, note: "no gate (observer unavailable)" }, errors: [] };
     row = { ...row, stage: "ingesting" };
     updateSupervised(ctx.db, row);
 

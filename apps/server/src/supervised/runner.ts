@@ -379,6 +379,14 @@ export const dockerSupervisedExecutor: SupervisedExecutor = async (plan) => {
   };
   for (const k of ["streamJson", "hooks", "proxyLog", "brokerLog", "gitStatus", "gitDiff", "stderr"] as const) cap[k] = clean(cap[k]);
   if (cap.error) cap.error = clean(cap.error);
+  // The kernel record holds the argv of every process in the agent container (e.g. a `curl -H "Authorization: Bearer
+  // <placeholder>"` seen in a real Tetragon export): scrub it too before it reaches the DB, blobs or the capture
+  // artifact. The raw host-side slice is untouched, so its sha256 stays verifiable. Tokens are JSON-safe strings.
+  if (cap.kernel) {
+    const j = JSON.stringify(cap.kernel);
+    const c = clean(j);
+    if (c !== j) cap.kernel = JSON.parse(c) as KernelObservation;
+  }
   if (token) cap.tokenScan = hit ? "scrubbed" : "clean";
   return cap;
 };

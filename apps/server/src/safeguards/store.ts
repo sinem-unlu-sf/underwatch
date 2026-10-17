@@ -71,7 +71,7 @@ const V2_COLS = "lifecycle_status, verification_state, current_version_id, works
  * passed (verification/repo normalize() applies the Addendum A and kernel_enforcement invariants). Otherwise it is
  * served as Inconclusive. The stored row is not modified here.
  */
-function servedVerification(db: Db, safeguard: { id: string; last_verification_run_id?: string | null }, stored: VerificationState): VerificationState {
+export function servedVerification(db: Db, safeguard: { id: string; last_verification_run_id?: string | null }, stored: VerificationState): VerificationState {
   if (stored !== "passed") return stored;
   const last = (safeguard.last_verification_run_id ? getRunRow(db, safeguard.last_verification_run_id) : null) ?? listRunsForSafeguard(db, safeguard.id)[0] ?? null;
   return last && last.verification_status === "passed" ? stored : "inconclusive";

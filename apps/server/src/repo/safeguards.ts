@@ -12,7 +12,25 @@ import { stmt } from "../db/codec";
 import type { Db } from "../db/connection";
 import * as t from "../db/tables";
 import { countOf, fixtureCondition, whereClause } from "./sql";
-import { recordedOutcomesFromRow } from "../verification/repo";
+import { getRunRow, recordedOutcomesFromRow } from "../verification/repo";
+import { servedVerification } from "../safeguards/store";
+
+/**
+ * Read guard shared with the detail endpoint (FR10 consistency): a legacy single-value "verified" result is served only
+ * when the run itself is served as passed by verification/repo normalize() (Addendum A + kernel_enforcement + rule 5).
+ * Otherwise it is served as inconclusive. Stored rows are not modified.
+ */
+function guardRun<T extends VerificationRun>(db: Db, run: T): T {
+  if (run.result !== "verified_for_tested_scenario") return run;
+  const served = getRunRow(db, run.id);
+  return served && served.verification_status === "passed" ? run : { ...run, result: "verification_inconclusive" };
+}
+
+/** Same guard for the safeguard-level legacy status shown in lists (the detail endpoint uses servedVerification()). */
+function guardSafeguard<T extends Safeguard>(db: Db, sg: T): T {
+  if (sg.verification_status !== "verified_for_tested_scenario") return sg;
+  return servedVerification(db, sg, "passed") === "passed" ? sg : { ...sg, verification_status: "verification_inconclusive" };
+}
 
 const SAFEGUARD_LIST_SELECT = `SELECT ${t.safeguards.columns("sg")}, f.title AS finding_title, f.status AS finding_status, f.run_id AS run_id
   FROM safeguards sg JOIN findings f ON f.id = sg.finding_id`;
@@ -21,11 +39,11 @@ function getVerificationRun(db: Db, id: string | null): VerificationRun | null {
   if (id === null) return null;
   const row = stmt(db, `SELECT ${t.verificationRuns.selectColumns}, security_outcome, task_outcome, reported_task_claim FROM verification_runs WHERE id = ?`).get(id);
   // Issue 4: include harness-recorded outcomes when present (historical rows have none; the UI derives them as legacy).
-  return row ? { ...t.verificationRuns.fromRow(row), ...recordedOutcomesFromRow(row) } : null;
+  return row ? guardRun(db, { ...t.verificationRuns.fromRow(row), ...recordedOutcomesFromRow(row) }) : null;
 }
 
 function toListItem(db: Db, row: Record<string, unknown>): SafeguardListItem {
-  const safeguard = t.safeguards.fromRow(row);
+  const safeguard = guardSafeguard(db, t.safeguards.fromRow(row));
   return {
     ...safeguard,
     finding_title: row.finding_title as string,
@@ -64,7 +82,7 @@ export function listSafeguards(db: Db, q: SafeguardsQuery): SafeguardsResponse {
 export function listSafeguardsForFinding(db: Db, findingId: string): Safeguard[] {
   return stmt(db, `SELECT ${t.safeguards.selectColumns} FROM safeguards WHERE finding_id = ? ORDER BY julianday(created_at) DESC, id`)
     .all(findingId)
-    .map((r) => t.safeguards.fromRow(r));
+    .map((r) => guardSafeguard(db, t.safeguards.fromRow(r)));
 }
 
 /** Completed verification runs, most recently ended first. */
@@ -78,5 +96,5 @@ export function recentCompletedVerifications(db: Db, limit: number): { items: Ve
      ORDER BY v.ended_at IS NULL, julianday(v.ended_at) DESC, v.id
      LIMIT ?`,
   ).all(limit);
-  return { items: rows.map((r) => ({ ...t.verificationRuns.fromRow(r), ...recordedOutcomesFromRow(r), safeguard_title: r.safeguard_title as string })), total };
+  return { items: rows.map((r) => guardRun(db, { ...t.verificationRuns.fromRow(r), ...recordedOutcomesFromRow(r), safeguard_title: r.safeguard_title as string })), total };
 }

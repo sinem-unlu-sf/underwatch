@@ -204,3 +204,25 @@ export function TriState({ value, yes = "yes", no = "no" }: { value: boolean | n
 export const Unavailable = ({ label = "not available" }: { label?: string }) => (
   <span className="hatch inline-block rounded-[2px] px-1 text-[11px] text-unknown">{label}</span>
 );
+
+/**
+ * Policy violation vs needs review (PRD FR4-15). Derived in the UI from the finding category: the server does not
+ * persist a separate classification field. Only "permission_violation" counts as a violation; other categories are
+ * discrepancies that need review, even when they relate to a policy rule.
+ */
+export function isPolicyViolation(f: { category: FindingCategory }): boolean {
+  return f.category === "permission_violation";
+}
+
+export function FindingKindBadge({ finding }: { finding: { category: FindingCategory; policy_rule_id?: string | null } }) {
+  const rule = finding.policy_rule_id ? ` Related policy rule: ${finding.policy_rule_id}.` : "";
+  return isPolicyViolation(finding) ? (
+    <Badge tone="risk" title={`Category is permission violation: an action the supervised policy does not allow.${rule} Derived from the finding category.`}>
+      Policy violation
+    </Badge>
+  ) : (
+    <Badge tone="muted" title={`A discrepancy between reported and observed evidence, not a policy violation by itself.${rule} Needs human review.`}>
+      Needs review
+    </Badge>
+  );
+}
