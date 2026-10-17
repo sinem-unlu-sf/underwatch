@@ -8,8 +8,10 @@ import {
   type FindingDetailResponse,
   type OverviewResponse,
   type RunsResponse,
+  type SafeguardsResponse,
   type SettingsStatusResponse,
 } from "@kw/schema";
+import { displayTime, overallStatus } from "../status";
 import { importFixture } from "../ingest/fixtures";
 import { persistRunBundle } from "../ingest/persist";
 import { buildBundle, buildFixtureFile } from "./bundle";
@@ -120,7 +122,14 @@ describe("overview", () => {
     expect(body.safeguards_awaiting_approval.count).toBe(2);
     expect(body.recent_verification_results.count).toBe(2);
     expect(body.recent_verification_results.items[0]?.safeguard_title).toBe("Deny .env reads");
-    expect(body.observation_health.overall).toBe("not_implemented");
+    // Not-implemented collectors are listed per component but do not drive the summary (browser check: it read as if
+    // nothing is observed). In the test env Neo4j and ai& are not configured, so the summary is "not_configured".
+    expect(body.observation_health.overall).toBe("not_configured");
+    expect(body.observation_health.components.some((c) => c.status === "not_implemented")).toBe(true);
+    // FR10 read guard (PRD-COVERAGE 4a #6): the bundle's legacy "verified" run has no independently observed task
+    // success, so it is served as inconclusive here exactly as on the detail endpoint; nothing stale shows as passed.
+    for (const v of body.recent_verification_results.items) expect(v.result).not.toBe("verified_for_tested_scenario");
+    expect(body.recent_verification_results.items[0]?.result).toBe("verification_inconclusive");
     expect(body.observation_health.components.find((c) => c.id === "claude-code")?.status).toBe("configured");
 
     await postJson(ctx.app, apiPaths.findingStatus(FX_NEW_FINDING), { to: "confirmed" });
@@ -231,6 +240,12 @@ describe("run, event, finding, safeguard, evidence, settings endpoints", () => {
     expect(plain.body.ai_inference).toMatchObject({ status: "not_configured", configured_via: null });
     expect(plain.body.neo4j).toMatchObject({ status: "not_configured", configured_via: null });
     expect(plain.body.policy.active_policy_version_id).toBe("pol_live_api");
+    // 4a #12: Settings names the built-in supervised policy; kernel tracer text reflects attachment to supervised runs.
+    expect(plain.body.policy.detail).toMatch(/Kernel Witness supervised policy/);
+    expect(plain.body.policy.detail).not.toMatch(/no policy is active/);
+    const kernel = plain.body.collectors.find((c) => c.id === "kernel_tracer")!;
+    expect(kernel.detail).toMatch(/Attached to supervised runs/);
+    expect(kernel.detail).not.toMatch(/not attached to supervised runs/);
     expect(plain.body.data_mode.contains_fixture_data).toBe(true);
 
     const secret = "sk-super-secret-value-123";
@@ -247,5 +262,34 @@ describe("run, event, finding, safeguard, evidence, settings endpoints", () => {
     } finally {
       await configured.close();
     }
+  });
+});
+
+describe("verification read guards on lists (PRD-COVERAGE 4a #6)", () => {
+  it("serves a stale legacy pass as inconclusive in the safeguard list, last_verification and finding detail", async () => {
+    const list = await getJson<SafeguardsResponse>(ctx.app, apiPaths.safeguards());
+    expect(list.status).toBe(200);
+    expect(list.body.items.length).toBeGreaterThan(0);
+    for (const sg of list.body.items) {
+      expect(sg.verification_status).toBe("verification_inconclusive");
+      expect(sg.last_verification?.result).toBe("verification_inconclusive");
+    }
+    const stored = ctx.db.prepare("SELECT COUNT(*) AS n FROM safeguards WHERE verification_status = 'verified_for_tested_scenario'").get() as { n: number };
+    expect(Number(stored.n)).toBe(2); // stored rows are not modified
+    const detail = await getJson<FindingDetailResponse>(ctx.app, apiPaths.finding(FX_NEW_FINDING));
+    for (const sg of detail.body.safeguards) expect(sg.verification_status).not.toBe("verified_for_tested_scenario");
+  });
+});
+
+describe("overallStatus", () => {
+  it("ignores not-implemented components unless every component is not implemented", () => {
+    expect(overallStatus(["configured", "not_implemented", "connected"])).toBe("configured");
+    expect(overallStatus(["connected", "not_implemented", "degraded"])).toBe("degraded");
+    expect(overallStatus(["not_implemented", "not_implemented"])).toBe("not_implemented");
+  });
+
+  it("formats status-detail timestamps in JST like the UI", () => {
+    expect(displayTime("2026-10-17T03:31:01.000Z")).toBe("2026-10-17 12:31:01 JST");
+    expect(displayTime("not a date")).toBe("not a date");
   });
 });

@@ -144,6 +144,21 @@ export const EVIDENCE_SUPPORT_LABELS: Record<EvidenceSupport, string> = {
   unsupported: "Unsupported (no valid citation)",
 };
 
+/** Kinds of action claims that need a confirming Kernel Witness record (Addendum C: never claim unconfirmed actions). */
+export const ActionClaimKind = z.enum(["verified", "tested", "applied", "fixed"]);
+export type ActionClaimKind = z.infer<typeof ActionClaimKind>;
+
+export const ActionClaimFlag = z.object({
+  /** Where the sentence was found in the AI answer. */
+  location: z.enum(["summary", "verified_fact", "hypothesis"]),
+  claim: ActionClaimKind,
+  /** The AI sentence that makes the claim (verbatim, clipped). */
+  text: z.string(),
+  /** App-written reason (never model text). */
+  reason: z.string(),
+});
+export type ActionClaimFlag = z.infer<typeof ActionClaimFlag>;
+
 export const CheckedClaim = z.object({
   text: z.string(),
   /** Cited ids that exist in the bundle that was sent (clickable). */
@@ -185,8 +200,22 @@ export const AskWitnessAnswer = z.object({
    * omitted items, invalid citations. Optional for compatibility; the server always sets it.
    */
   evidence_limitations: z.array(z.string()).optional(),
+  /**
+   * App-generated (Addendum C): statements in the AI text that say an action was performed / applied / tested /
+   * verified / fixed while no Kernel Witness record in the bundle confirms it. Optional for compatibility.
+   */
+  action_claim_flags: z.array(ActionClaimFlag).optional(),
 });
 export type AskWitnessAnswer = z.infer<typeof AskWitnessAnswer>;
+
+/** Answer depth (Addendum C): concise by default, more depth on request. */
+export const AskWitnessDepth = z.enum(["concise", "detailed"]);
+export type AskWitnessDepth = z.infer<typeof AskWitnessDepth>;
+/** Answer style: simple = plain language without jargon (same evidence rules). */
+export const AskWitnessStyle = z.enum(["standard", "simple"]);
+export type AskWitnessStyle = z.infer<typeof AskWitnessStyle>;
+export const ASK_WITNESS_DEFAULT_DEPTH: AskWitnessDepth = "concise";
+export const ASK_WITNESS_DEFAULT_STYLE: AskWitnessStyle = "standard";
 
 export const InvestigationTurnStatus = z.enum(["answered", "insufficient_evidence", "ai_unavailable", "ai_error", "invalid_output"]);
 export type InvestigationTurnStatus = z.infer<typeof InvestigationTurnStatus>;
@@ -210,6 +239,9 @@ export const InvestigationTurn = z.object({
   answer: AskWitnessAnswer.nullable(),
   error: z.object({ code: InvestigationTurnErrorCode, message: z.string() }).nullable(),
   created_at: Timestamp,
+  /** Additive (Addendum C): the depth/style this turn was asked with. Absent on older turns (= concise/standard). */
+  depth: AskWitnessDepth.optional(),
+  style: AskWitnessStyle.optional(),
 });
 export type InvestigationTurn = z.infer<typeof InvestigationTurn>;
 
@@ -245,7 +277,23 @@ export const ASK_WITNESS_WORKSPACE_SUGGESTED_QUESTIONS = [
   "Where is observation coverage weakest?",
 ] as const;
 
+/**
+ * Finding-scope starters (Addendum C section 4: the judge's eight questions). The earlier investigator questions stay
+ * available as ASK_WITNESS_INVESTIGATOR_QUESTIONS.
+ */
 export const ASK_WITNESS_SUGGESTED_QUESTIONS = [
+  "Why is this a problem?",
+  "Can you explain this in simpler terms?",
+  "What evidence supports this conclusion?",
+  "What could happen if this issue is ignored?",
+  "Why does the agent's report differ from the observed behavior?",
+  "How should I fix this issue?",
+  "How can I verify that the fix works?",
+  "What additional technical details should I know?",
+] as const;
+
+/** Pre-Addendum-C finding-scope starters (kept; shown as "more questions" in the panel). */
+export const ASK_WITNESS_INVESTIGATOR_QUESTIONS = [
   "Why was this finding flagged?",
   "Did the agent actually access the file, or was the attempt blocked?",
   "Which evidence supports this conclusion?",
@@ -265,6 +313,10 @@ export const AskWitnessBody = z.object({
   investigation_id: InvestigationId.optional(),
   question: z.string().trim().min(1).max(2000),
   client_request_id: ClientRequestId,
+  /** Additive (Addendum C). Omitted = "concise". */
+  depth: AskWitnessDepth.optional(),
+  /** Additive (Addendum C). Omitted = "standard". */
+  style: AskWitnessStyle.optional(),
 });
 export type AskWitnessBody = z.infer<typeof AskWitnessBody>;
 
@@ -358,4 +410,94 @@ export function checkAskWitnessOutput(out: AskWitnessModelOutput, bases: Readonl
     insufficient_evidence: insufficient,
     advisory: true,
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Action-claim check (Addendum C section 4): the AI must not say that something was performed, applied, tested,
+// verified or fixed unless a Kernel Witness record in the bundle that was sent confirms it.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Ids of bundle records that confirm each kind of action (empty = no record confirms it). */
+export interface ActionRecordStatus {
+  verified: string[];
+  tested: string[];
+  applied: string[];
+  fixed: string[];
+}
+
+type RecordLike = { evidence_id: string; kind: string; fields: Readonly<Record<string, unknown>> };
+
+const TESTED_SAFEGUARD_STATES = new Set(["verified_for_tested_scenario", "failed_verification", "verification_inconclusive"]);
+
+/**
+ * Derives which actions the records confirm, from bundle items only (finding, safeguard and verification records).
+ * verified: a safeguard verified_for_tested_scenario, or a completed verification run whose security outcome is an
+ * observed block. tested: any completed verification run / tested safeguard state. applied: application_status
+ * "applied". fixed: finding status "resolved" (or an applied safeguard, which is a recorded mitigation).
+ */
+export function actionRecordsFromItems(items: readonly RecordLike[]): ActionRecordStatus {
+  const r: ActionRecordStatus = { verified: [], tested: [], applied: [], fixed: [] };
+  for (const i of items) {
+    const f = i.fields;
+    const sgState = f.legacy_safeguard_verification_status ?? f.verification_status;
+    const runCompleted = f.last_verification_run_status === "completed" || (i.kind === "verification" && f.status === "completed");
+    const observedBlock = f.security_outcome === "blocked" && f.security_outcome_basis === "observed";
+    if (i.kind === "safeguard" || i.kind === "verification") {
+      if (sgState === "verified_for_tested_scenario" || (runCompleted && observedBlock)) r.verified.push(i.evidence_id);
+      if (runCompleted || (typeof sgState === "string" && TESTED_SAFEGUARD_STATES.has(sgState))) r.tested.push(i.evidence_id);
+      if (f.application_status === "applied") {
+        r.applied.push(i.evidence_id);
+        r.fixed.push(i.evidence_id);
+      }
+    }
+    if (i.kind === "finding" && f.status === "resolved") r.fixed.push(i.evidence_id);
+  }
+  return r;
+}
+
+const ACTION_PATTERNS: Record<ActionClaimKind, RegExp> = {
+  verified: /\b(?:has|have|had|was|were|been|is|are)\s+(?:been\s+)?(?:now\s+)?(?:successfully\s+)?verified\b|\bverification\s+(?:passed|succeeded|confirmed)\b|\bpassed\s+(?:its\s+|the\s+)?verification\b/i,
+  tested: /\b(?:has|have|had|was|were|been)\s+(?:been\s+)?(?:successfully\s+)?tested\b|\b(?:regression\s+)?tests?\s+(?:passed|succeeded)\b|\bpassed\s+(?:the\s+|its\s+|a\s+)?(?:regression\s+)?tests?\b/i,
+  applied: /\b(?:has|have|had|was|were|been)\s+(?:been\s+)?(?:successfully\s+)?(?:applied|deployed|installed|enabled|rolled\s+out|added)\b|\b(?:is|are)\s+(?:now\s+)?(?:active|in\s+place|in\s+effect)\b|\bnow\s+(?:blocks|prevents|enforces)\b/i,
+  fixed: /\b(?:has|have|had|was|were|been|is|are)\s+(?:been\s+)?(?:now\s+)?(?:fixed|resolved|remediated|patched|mitigated)\b/i,
+};
+/** Applied-claims only count when they are about a remediation (a deny rule that existed during the run is policy, not an action). */
+const REMEDIATION_SUBJECT = /\b(?:safeguards?|fix(?:es)?|patch|remediation|hooks?|instructions?|CLAUDE\.md|regression\s+tests?|permission\s+rules?|guardrails?|change)\b/i;
+/** Negated, hedged, conditional or recommended statements are not claims that something happened. */
+const HEDGE =
+  /\b(?:not|never|no|none|nothing|cannot|unverified|untested|unapplied|yet|pending|whether|if|until|once|would|should|could|might|may|must|can|need|needs|recommend\w*|propos\w*|consider|unless|suggest\w*|plan(?:ned)?|intended|without|unknown|unclear)\b|n't\b|\bto\s+be\b/i;
+
+const CLAIM_REASON: Record<ActionClaimKind, string> = {
+  verified: "No Kernel Witness record in the evidence sent shows a passed verification; treat this as unconfirmed.",
+  tested: "No Kernel Witness record in the evidence sent shows that a test or verification run was carried out.",
+  applied: "No Kernel Witness record in the evidence sent shows that a safeguard or change was applied.",
+  fixed: "No Kernel Witness record in the evidence sent shows that this was fixed or resolved.",
+};
+
+function sentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0);
+}
+
+/** Flags AI sentences that assert an action happened without a confirming record. App-side, deterministic, conservative. */
+export function flagUnconfirmedActionClaims(answer: Pick<AskWitnessAnswer, "summary" | "verified_facts" | "hypotheses">, records: ActionRecordStatus): ActionClaimFlag[] {
+  const out: ActionClaimFlag[] = [];
+  const scan = (text: string, location: ActionClaimFlag["location"]) => {
+    for (const s of sentences(text)) {
+      if (HEDGE.test(s)) continue;
+      for (const kind of ActionClaimKind.options) {
+        if (!ACTION_PATTERNS[kind].test(s)) continue;
+        if (kind === "applied" && !REMEDIATION_SUBJECT.test(s)) continue;
+        if (records[kind].length > 0) continue;
+        out.push({ location, claim: kind, text: s.length > 400 ? `${s.slice(0, 400)}…` : s, reason: CLAIM_REASON[kind] });
+        break;
+      }
+    }
+  };
+  scan(answer.summary, "summary");
+  for (const f of answer.verified_facts) scan(f.text, "verified_fact");
+  for (const h of answer.hypotheses) scan(h.text, "hypothesis");
+  return out;
 }

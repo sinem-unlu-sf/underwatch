@@ -427,7 +427,16 @@ export function createVerificationService(ctx: ServerContext, deps: Verification
     } else if (!deps.executor) {
       ev.limitations.push("Network isolation self-test did not run for this run (no result recorded); gateway reachability is UNVERIFIED.");
     }
-    const kernelOut = recordKernelObservation(ctx, { runId, obsRunId, type, res, task: deps.task ?? SCENARIO_TASK, put });
+    const kernelOut = recordKernelObservation(ctx, {
+      runId,
+      obsRunId,
+      type,
+      res,
+      task: deps.task ?? SCENARIO_TASK,
+      put,
+      // Codex mode applies no managed settings, so no Claude Code policy version is claimed for it.
+      policy: codex ? undefined : { managedSha256: policySha, safeguardId: sg.id, versionId: version.id ?? null, enforcePaths },
+    });
     if (kernelOut) {
       ev = applyKernelEvidence(ev, kernelOut.summary, (id) => `event:${id}`, [`evidence:${kernelOut.evidenceId}`], { mechanismUnderTest: type });
       ev.limitations.push(...kernelOut.limitations);

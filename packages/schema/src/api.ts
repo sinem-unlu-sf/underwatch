@@ -38,7 +38,8 @@ import {
   InvestigationsListQuery,
   ScopedInvestigationsResponse,
 } from "./askwitness";
-import { FindingGraphResponse } from "./graph";
+import { FindingGraphResponse, FindingGraphSummaryResponse } from "./graph";
+import { FindingBrief, FindingBriefResponse } from "./brief";
 import {
   MechanismsResponse,
   SafeguardApproveBody,
@@ -92,6 +93,10 @@ export const API_ROUTES = {
   investigations: "/api/investigations",
   findingSafeguardProposals: "/api/findings/:id/safeguards/proposals",
   findingGraph: "/api/findings/:id/graph",
+  /** Addendum C: deterministic concise explanation (same records as GET /api/findings/:id; also served there as `brief`). */
+  findingBrief: "/api/findings/:id/brief",
+  /** Addendum C: key relationships for a finding (plain-language paths over the same graph data). */
+  findingGraphSummary: "/api/findings/:id/graph/summary",
   safeguardMechanisms: "/api/safeguard-mechanisms",
   safeguard: "/api/safeguards/:id",
   safeguardVersions: "/api/safeguards/:id/versions",
@@ -129,6 +134,8 @@ export const apiPaths = {
   investigations: () => API_ROUTES.investigations,
   findingSafeguardProposals: (id: string) => `/api/findings/${enc(id)}/safeguards/proposals`,
   findingGraph: (id: string) => `/api/findings/${enc(id)}/graph`,
+  findingBrief: (id: string) => `/api/findings/${enc(id)}/brief`,
+  findingGraphSummary: (id: string) => `/api/findings/${enc(id)}/graph/summary`,
   safeguardMechanisms: () => API_ROUTES.safeguardMechanisms,
   safeguard: (id: string) => `/api/safeguards/${enc(id)}`,
   safeguardVersions: (id: string) => `/api/safeguards/${enc(id)}/versions`,
@@ -427,6 +434,11 @@ export const FindingDetailResponse = z.object({
   allowed_transitions: z.array(FindingStatus),
   /** ai& explanations are pending architecture review; until then status is "not_implemented" and no text is returned. */
   ai_explanation: z.object({ status: IntegrationStatus, detail: z.string() }),
+  /**
+   * Addendum C: deterministic concise explanation built from the records above (plus coverage and verification runs).
+   * A presentation, never a separate source of truth. Optional: omitted if it could not be built.
+   */
+  brief: FindingBrief.optional(),
 });
 export type FindingDetailResponse = z.infer<typeof FindingDetailResponse>;
 
@@ -571,6 +583,8 @@ export const API_CONTRACT = {
     response: SafeguardProposalResponse,
   },
   findingGraph: { method: "GET", path: API_ROUTES.findingGraph, params: IdParams, response: FindingGraphResponse },
+  findingBrief: { method: "GET", path: API_ROUTES.findingBrief, params: IdParams, response: FindingBriefResponse },
+  findingGraphSummary: { method: "GET", path: API_ROUTES.findingGraphSummary, params: IdParams, response: FindingGraphSummaryResponse },
   safeguardMechanisms: { method: "GET", path: API_ROUTES.safeguardMechanisms, response: MechanismsResponse },
   safeguard: { method: "GET", path: API_ROUTES.safeguard, params: IdParams, response: SafeguardDetailResponse },
   safeguardVersions: { method: "POST", path: API_ROUTES.safeguardVersions, params: IdParams, body: SafeguardVersionBody, response: SafeguardDetailResponse },

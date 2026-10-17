@@ -33,17 +33,33 @@ export function SupportBadge({ support }: { support: EvidenceSupport }) {
   );
 }
 
+/** For hypotheses: describes what the cited records are, without implying the hypothesis itself is confirmed. */
+const HYPOTHESIS_CITES_LABEL: Record<EvidenceSupport, string> = {
+  observed_evidence: "Cites an observed record (hypothesis not confirmed)",
+  reported_evidence_only: "Cites agent-reported records only",
+  derived_only: "Cites Kernel Witness analysis only",
+  unsupported: EVIDENCE_SUPPORT_LABELS.unsupported,
+};
+
+function HypothesisCitesBadge({ support }: { support: EvidenceSupport }) {
+  return (
+    <Badge tone={support === "unsupported" ? "unknown" : "muted"} title="Describes the cited records only. A hypothesis is not confirmed by citing a record.">
+      {HYPOTHESIS_CITES_LABEL[support]}
+    </Badge>
+  );
+}
+
 export interface EvidenceLookup {
   index: ReadonlyMap<string, BundleEvidenceRef>;
   onOpen: (id: string) => void;
 }
 
-function ClaimItem({ claim, ev, showSupport = true }: { claim: CheckedClaim; ev: EvidenceLookup; showSupport?: boolean }) {
+function ClaimItem({ claim, ev, showSupport = true, hypothesis = false }: { claim: CheckedClaim; ev: EvidenceLookup; showSupport?: boolean; hypothesis?: boolean }) {
   return (
     <li className="rounded-[3px] border border-line bg-surface-2 px-2 py-1.5">
       <div className="text-[12.5px] whitespace-pre-wrap text-fg-0">{claim.text}</div>
       <div className="mt-1 flex flex-wrap items-center gap-1">
-        {showSupport ? <SupportBadge support={claim.support} /> : null}
+        {showSupport ? hypothesis ? <HypothesisCitesBadge support={claim.support} /> : <SupportBadge support={claim.support} /> : null}
         {claim.evidence_ids.map((id) => (
           <EvidenceChip key={id} id={id} evidenceRef={ev.index.get(id)} onOpen={ev.onOpen} />
         ))}
@@ -67,7 +83,23 @@ function Section({ title, hint, count, children, tone }: { title: string; hint?:
   );
 }
 
-function ClaimSection({ title, hint, claims, ev, tone, empty }: { title: string; hint?: ReactNode; claims: CheckedClaim[]; ev: EvidenceLookup; tone?: string; empty?: string }) {
+function ClaimSection({
+  title,
+  hint,
+  claims,
+  ev,
+  tone,
+  empty,
+  hypothesis,
+}: {
+  title: string;
+  hint?: ReactNode;
+  claims: CheckedClaim[];
+  ev: EvidenceLookup;
+  tone?: string;
+  empty?: string;
+  hypothesis?: boolean;
+}) {
   if (claims.length === 0 && !empty) return null;
   return (
     <Section title={title} hint={hint} count={claims.length} tone={tone}>
@@ -76,7 +108,7 @@ function ClaimSection({ title, hint, claims, ev, tone, empty }: { title: string;
       ) : (
         <ul className="space-y-1">
           {claims.map((c, i) => (
-            <ClaimItem key={i} claim={c} ev={ev} />
+            <ClaimItem key={i} claim={c} ev={ev} hypothesis={hypothesis} />
           ))}
         </ul>
       )}
@@ -127,7 +159,7 @@ export function AnswerBody({ answer, ev, onCreateSafeguard }: { answer: AskWitne
         tone="text-reported"
       />
       <ClaimSection title="Supported only by Kernel Witness analysis" hint="Cites only derived records (findings, correlations, policy rules), not raw evidence." claims={derived} ev={ev} />
-      <ClaimSection title="Hypotheses" hint="Plausible explanations that are not confirmed." claims={answer.hypotheses} ev={ev} empty="None offered." />
+      <ClaimSection title="Hypotheses" hint="Plausible explanations that are not confirmed." claims={answer.hypotheses} ev={ev} empty="None offered." hypothesis />
 
       <Section title="Unknowns" count={answer.unknowns.length}>
         {answer.unknowns.length === 0 ? (

@@ -405,3 +405,46 @@ describe("safeguard versioning and approval", () => {
     expect(EVIDENCE_SUPPORT_LABELS).toBeDefined();
   });
 });
+
+describe("safeguard proposal gate (FR9-01, PRD-COVERAGE 4a #5)", () => {
+  it("allows a new finding with evidence but flags it as not confirmed", async () => {
+    const { app } = await setup();
+    const r = await propose(app, { client_request_id: "req-gate-new-0001" });
+    expect(r.status).toBe(200);
+    expect(r.body.finding_confirmed).toBe(false);
+    expect(r.body.warnings?.join(" ")).toMatch(/not confirmed/);
+    const replay = await propose(app, { client_request_id: "req-gate-new-0001" });
+    expect(replay.body.replayed).toBe(true);
+    expect(replay.body.finding_confirmed).toBe(false);
+  });
+
+  it("reports a confirmed finding as confirmed with no warning", async () => {
+    const { app } = await setup();
+    expect((await postJson(app, apiPaths.findingStatus(FINDING), { to: "confirmed" })).status).toBe(200);
+    const r = await propose(app, { client_request_id: "req-gate-conf-0001" });
+    expect(r.status).toBe(200);
+    expect(r.body.finding_confirmed).toBe(true);
+    expect(r.body.warnings).toEqual([]);
+  });
+
+  it("rejects a dismissed finding with 409 and creates nothing", async () => {
+    const { app, db } = await setup();
+    const before = tableCount(db, "safeguards");
+    db.prepare("UPDATE findings SET status = 'dismissed' WHERE id = ?").run(FINDING);
+    const r = await propose(app, { client_request_id: "req-gate-dism-0001" });
+    expect(r.status).toBe(409);
+    expect((r.body as unknown as { error: { code: string; message: string } }).error.code).toBe("invalid_transition");
+    expect(tableCount(db, "safeguards")).toBe(before);
+  });
+
+  it("rejects a finding with no related events or evidence with 400", async () => {
+    const { app, db } = await setup();
+    const before = tableCount(db, "safeguards");
+    db.prepare("DELETE FROM finding_events WHERE finding_id = ?").run(FINDING);
+    db.prepare("DELETE FROM finding_evidence WHERE finding_id = ?").run(FINDING);
+    const r = await propose(app, { client_request_id: "req-gate-empty-0001" });
+    expect(r.status).toBe(400);
+    expect((r.body as unknown as { error: { code: string } }).error.code).toBe("validation_error");
+    expect(tableCount(db, "safeguards")).toBe(before);
+  });
+});

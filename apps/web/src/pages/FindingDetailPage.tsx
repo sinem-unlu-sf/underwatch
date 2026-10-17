@@ -55,6 +55,13 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
   const [createReq, setCreateReq] = useState<CreateSafeguardRequest | null>(null);
   const requestSafeguard = (investigationId: string | null) => setCreateReq((r) => ({ investigationId, n: (r?.n ?? 0) + 1 }));
   const [openEvidence, setOpenEvidence] = useState<string | null>(null);
+  /** Mirrors the server's proposal gate (dismissed finding, or nothing to base a safeguard on). */
+  const proposeBlocked =
+    f.status === "dismissed"
+      ? "This finding was dismissed. Reopen it before proposing a safeguard."
+      : data.related_events.length === 0 && data.evidence.length === 0
+        ? "No related events or evidence, so there is nothing to base a safeguard on."
+        : null;
   /** Page-local index so evidence ids cited by safeguards open the same drawer as Ask Witness citations. */
   const pageIndex = useMemo(() => {
     const m = new Map<string, BundleEvidenceRef>();
@@ -161,6 +168,8 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
             <p className="whitespace-pre-wrap text-fg-0">{f.recommended_next_step || <span className="text-fg-2">None recorded.</span>}</p>
           </Panel>
 
+          <EvidenceGraphPanel findingId={f.id} onOpenEvidence={setOpenEvidence} />
+
           <AskWitnessPanel
             finding={{ id: f.id, title: f.title, severity: f.severity, is_fixture: f.is_fixture }}
             onCreateSafeguard={requestSafeguard}
@@ -233,8 +242,6 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
             )}
           </Panel>
 
-          <EvidenceGraphPanel findingId={f.id} onOpenEvidence={setOpenEvidence} />
-
           <Panel title="Missing information">
             {f.missing_information.length === 0 ? (
               <span className="text-fg-2">The finding records no evidence gaps.</span>
@@ -256,10 +263,12 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
           <Panel title="Actions">
             <FindingActions findingId={f.id} runId={run.id} status={f.status} serverAllowed={data.allowed_transitions} />
             <div className="mt-3 border-t border-line pt-3">
-              <button type="button" className="btn" onClick={() => requestSafeguard(null)}>
+              <button type="button" className="btn" onClick={() => requestSafeguard(null)} disabled={proposeBlocked !== null}>
                 Create safeguard
               </button>
-              <p className="mt-1 text-[11px] text-fg-2">Generates proposals for review. Nothing is applied without a diff and your approval.</p>
+              <p className="mt-1 text-[11px] text-fg-2">
+                {proposeBlocked ?? "Generates proposals for review. Nothing is applied without a diff and your approval."}
+              </p>
             </div>
           </Panel>
 

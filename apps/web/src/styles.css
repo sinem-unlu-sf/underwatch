@@ -118,6 +118,11 @@
   .btn-primary:hover:not(:disabled) {
     background: var(--color-fg-1);
   }
+  .btn-primary:disabled {
+    background: var(--color-surface-2);
+    color: var(--color-fg-disabled);
+    border-color: var(--color-line);
+  }
   .skeleton {
     background: var(--color-surface-2);
     border-radius: 2px;

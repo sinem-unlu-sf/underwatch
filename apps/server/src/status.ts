@@ -153,7 +153,7 @@ export function aiInferenceStatus(env: NodeJS.ProcessEnv, inference?: InferenceS
     detail:
       `ai& provider implemented and active (OpenAI-compatible chat completions, model ${inference.model}` +
       `${inference.base_host ? `, host ${inference.base_host}` : ""}); key from ${inference.key_source ?? "AIAND_API_KEY"}, held server-side, never shown. ` +
-      (last ? `Last Ask Witness call: ${last.status} at ${last.created_at}.` : "No Ask Witness call recorded yet.") +
+      (last ? `Last Ask Witness call: ${last.status} at ${displayTime(last.created_at)}.` : "No Ask Witness call recorded yet.") +
       " Advisory only: answers are labeled by evidence basis and never change findings.",
     configured_via: inference.key_source ?? "AIAND_API_KEY",
   };
@@ -170,6 +170,13 @@ export function neo4jStatus(env: NodeJS.ProcessEnv): ComponentStatus {
       : "Not configured: NEO4J_URI is not set. Graph projection is implemented but inactive; Ask Witness retrieval uses the relational (SQLite) fallback.",
     configured_via: uriSet ? "NEO4J_URI" : null,
   };
+}
+
+/** Timestamps inside status detail text, in the same zone the UI shows (JST, the demo machine's zone); ISO on failure. */
+export function displayTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.toLocaleString("sv-SE", { timeZone: "Asia/Tokyo", hour12: false })} JST`;
 }
 
 /** Worst-first ranking used to summarize several component statuses into one. */
@@ -211,7 +218,8 @@ export function settingsStatus({ db, dbLocation, env, inference }: StatusContext
   const policyCounts = stmt(db, "SELECT COUNT(*) AS total, COALESCE(SUM(is_fixture), 0) AS fixture FROM policy_versions").get()!;
   const totalPolicies = Number(policyCounts.total);
   const fixturePolicies = Number(policyCounts.fixture);
-  const activeLive = stmt(db, "SELECT id FROM policy_versions WHERE is_fixture = 0 ORDER BY julianday(created_at) DESC, id DESC LIMIT 1").get();
+  // Verification-run policy versions (kw-verification, one per tested safeguard version) are not the active policy.
+  const activeLive = stmt(db, "SELECT id FROM policy_versions WHERE is_fixture = 0 AND policy_id <> 'kw-verification' ORDER BY julianday(created_at) DESC, id DESC LIMIT 1").get();
   const migrations = appliedMigrations(db);
   const latest = migrations.at(-1);
 

@@ -2,7 +2,7 @@
  * Glue between a finished verification harness run and the kernel observer: ingest the Tetragon capture as an
  * observed run, store the normalized events / enforcement policy as artifacts, and summarize the restricted case.
  */
-import type { VerificationArtifactKind } from "@kw/schema";
+import { makeStableId, sha256Hex, type PolicyVersion, type VerificationArtifactKind } from "@kw/schema";
 import type { ServerContext } from "../context";
 import type { HarnessResult } from "../verification/harness";
 import { ingestKernelObservation } from "./ingest";
@@ -15,6 +15,35 @@ export interface KernelVerificationOutput {
   limitations: string[];
 }
 
+/**
+ * PolicyVersion for one verification observation run (PRD §7.2 / FR1-08): the merged managed settings (by sha256) plus
+ * the tested safeguard version and any Tetragon deny paths. Stable id by content, so identical policies share a row.
+ * No KW analysis rules are evaluated on verification runs (rules: []); the verdict comes from the verification evaluator.
+ */
+export function verificationPolicyVersion(p: { managedSha256: string; safeguardId: string; versionId: string | null; type: string; enforcePaths: string[] }, now: Date): PolicyVersion {
+  const content = JSON.stringify({
+    managed_settings_sha256: p.managedSha256,
+    tested_safeguard: { id: p.safeguardId, version_id: p.versionId, type: p.type },
+    enforce_paths: [...p.enforcePaths].sort(),
+  });
+  const sha = sha256Hex(content);
+  return {
+    id: makeStableId("policy_version", "kw-verification", sha),
+    is_fixture: false,
+    policy_id: "kw-verification",
+    version: `kw-verification@${sha.slice(0, 12)}`,
+    name: "Kernel Witness verification run policy",
+    description:
+      `Policy for one safeguard verification run: Claude Code managed settings (base + scenario baseline${p.type === "permission_rule" ? " + the tested permission overlay" : ""}; sha256 ${p.managedSha256})` +
+      (p.enforcePaths.length ? ` and a Tetragon deny-file-open policy for ${JSON.stringify([...p.enforcePaths].sort())} scoped to the run's agent container` : "") +
+      `. Tested safeguard ${p.safeguardId}${p.versionId ? ` (version ${p.versionId})` : ""}, in isolation (other applied safeguards not added). No KW analysis rules are evaluated on verification runs.`,
+    source_reference: `docker/agent/policy/managed-settings.json + apps/server/src/verification/policy.ts + safeguard ${p.safeguardId}`,
+    content_sha256: sha,
+    rules: [],
+    created_at: now.toISOString(),
+  };
+}
+
 export function recordKernelObservation(
   ctx: ServerContext,
   input: {
@@ -24,6 +53,8 @@ export function recordKernelObservation(
     res: HarnessResult;
     task: string;
     put: (kind: VerificationArtifactKind, label: string, data: string) => string | null;
+    /** Policy in force for the run; recorded as the observation run's policy_version when given. */
+    policy?: { managedSha256: string; safeguardId: string; versionId: string | null; enforcePaths: string[] };
   },
 ): KernelVerificationOutput | null {
   const obs = input.res.kernel;
@@ -37,6 +68,7 @@ export function recordKernelObservation(
     observation: obs,
     hostSources: { streamJson: input.res.captures.streamJson.length > 0, gitDiff: true, proxyLog: input.res.captures.proxyLog.length > 0 },
     now: ctx.now(),
+    policyVersion: input.policy ? verificationPolicyVersion({ ...input.policy, type: input.type }, ctx.now()) : null,
   });
   input.put(
     "summary",

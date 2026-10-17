@@ -11,5 +11,6 @@ export * from "./verification";
 export * from "./supervised";
 export * from "./outcomes";
 export * from "./graph";
+export * from "./brief";
 export * from "./findings-views";
 export type * from "./integrations";

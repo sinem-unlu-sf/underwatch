@@ -126,7 +126,7 @@ export function SafeguardsPage() {
             </EmptyState>
           ) : (
             <EmptyState title="No safeguards recorded">
-              A safeguard is proposed from a confirmed finding: a CLAUDE.md instruction, a Claude Code permission rule, a hook/policy check, or a
+              A safeguard is proposed from a finding that has related evidence and is not dismissed: a CLAUDE.md instruction, a Claude Code permission rule, a hook/policy check, or a
               regression test. Use “Create safeguard” on a finding page.
             </EmptyState>
           )}

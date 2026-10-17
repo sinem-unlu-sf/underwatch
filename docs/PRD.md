@@ -10,6 +10,7 @@
 **Addenda:**
 - **A: Ask Witness + Safeguard Generation** ([`PRD-addendum-ask-witness.md`](./PRD-addendum-ask-witness.md), added 2026-10-17). It extends FR-7 (ai& explanations), FR-9 (safeguard generation) and FR-10 (verification runs) with an interactive investigator for each finding, `CLAUDE.md` / permission-rule / hook / regression-test safeguards applied to an authorized local workspace, and controlled verification. Where the addendum is more specific than this document, the addendum governs.
 - **B: User-Controlled Findings Update Modes** ([`PRD-addendum-findings-modes.md`](./PRD-addendum-findings-modes.md), added 2026-10-17). The Findings view gets three presentation and refresh modes: Daily Digest, By Task (the default) and Current State, the last refreshing only when the user asks. Collection, finding generation and enforcement are explicitly decoupled from presentation. It refines §6.3 to §6.6: no auto-populating content, and the user decides when the view changes.
+- **C: Judge feedback: two levels of detail, contextual chatbot, easier graph access** ([`PRD-addendum-judge-feedback.md`](./PRD-addendum-judge-feedback.md), added 2026-10-17 after a judge review). Every finding gets a concise Problem / Why it matters / How to fix explanation built on the same evidence, with the full technical investigation kept intact. A contextual per-finding chatbot answers concise-by-default follow-ups. Neo4j relationships are easier to discover inside a finding. All existing features are preserved (inventory before and after).
 
 ---
 

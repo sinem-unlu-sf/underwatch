@@ -1,5 +1,5 @@
 import type { AskWitnessModelOutput } from "@kw/schema";
-import { ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCHEMA_VERSION, type AskWitnessHistoryEntry } from "../askwitness";
+import { ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCHEMA_VERSION, type AskWitnessCallOptions, type AskWitnessHistoryEntry } from "../askwitness";
 import type { EvidenceBundle } from "../bundle";
 import type { CheckedExplanation, CheckedSafeguardProposal } from "../citations";
 import { EXPLAIN_FINDING_V1, PROPOSE_SAFEGUARD_V1, type PromptTemplate } from "../prompts";
@@ -31,7 +31,7 @@ export class NullProvider implements InferenceProvider {
     const r = this.#unavailable(tpl.prompt_version, tpl.schema_version);
     return { ...r, meta: { ...r.meta, bundle_sha256: bundle?.sha256 ?? null } };
   }
-  async askWitness(_question: string, bundle: EvidenceBundle, _history: readonly AskWitnessHistoryEntry[] = [], _opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
+  async askWitness(_question: string, bundle: EvidenceBundle, _history: readonly AskWitnessHistoryEntry[] = [], _opts?: AskWitnessCallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
     const r = this.#unavailable(ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCHEMA_VERSION);
     return { ...r, meta: { ...r.meta, bundle_sha256: bundle?.sha256 ?? null } };
   }

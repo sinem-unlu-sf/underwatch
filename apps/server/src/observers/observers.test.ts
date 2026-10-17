@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Event, deriveVerificationState, type VerificationCaseOutcome } from "@kw/schema";
+import { Event, PolicyVersion, deriveVerificationState, type VerificationCaseOutcome } from "@kw/schema";
 import { normalizeSlice } from "@kw/observer-tetragon";
 import { openDatabase } from "../db/connection";
 import { applyMigrations } from "../db/migrate";
@@ -9,6 +9,7 @@ import { canonicalKernelEnforcementContent, enforcementPolicyName, parseKernelEn
 import { applyKernelEvidence, summarizeKernelEvidence, type EvaluationLike } from "./kernel-evidence";
 import { ingestKernelObservation, kernelCoverageReport, toEventRow } from "./ingest";
 import { runUnderTetragon, type TetragonApi } from "./tetragon-run";
+import { verificationPolicyVersion } from "./verification-kernel";
 
 /** REAL recorded Tetragon v1.7.0 export (package fixture; synthetic canary only). */
 const FX = join(import.meta.dirname, "..", "..", "..", "..", "packages", "observer-tetragon", "src", "__fixtures__", "live-alpine-enforced.jsonl");
@@ -262,5 +263,17 @@ describe("ingestKernelObservation", () => {
     expect(cov.unsupported_capabilities.join(" ")).toMatch(/Bytes sent are not established/);
     expect(cov.unsupported_capabilities.join(" ")).toMatch(/mmap/);
     expect(cov.categories.filter((c) => c.category === "permission_decisions")).toHaveLength(1);
+    // No policy given: the run's policy_version stays null (nothing is claimed).
+    expect((db.prepare("SELECT policy_version FROM runs WHERE id = ?").get("run_ingest") as { policy_version: string | null }).policy_version).toBeNull();
+
+    // With the verification run's policy (PRD-COVERAGE 4a #12): stored as a PolicyVersion row and linked from the run.
+    const pv = verificationPolicyVersion({ managedSha256: "a".repeat(64), safeguardId: "sg_t", versionId: "sgv_t_1", type: "kernel_enforcement", enforcePaths: ["/workspace/.env"] }, new Date("2026-10-17T03:00:06Z"));
+    expect(PolicyVersion.safeParse(pv).success).toBe(true);
+    expect(verificationPolicyVersion({ managedSha256: "a".repeat(64), safeguardId: "sg_t", versionId: "sgv_t_1", type: "kernel_enforcement", enforcePaths: ["/workspace/.env"] }, new Date()).id).toBe(pv.id);
+    expect(pv.description).toMatch(/Tetragon deny-file-open/);
+    const input2 = { ...input, obsRunId: "run_ingest_pv", policyVersion: pv };
+    ingestKernelObservation(db, input2);
+    expect((db.prepare("SELECT policy_version FROM runs WHERE id = ?").get("run_ingest_pv") as { policy_version: string }).policy_version).toBe(pv.id);
+    expect(db.prepare("SELECT name FROM policy_versions WHERE id = ?").get(pv.id)).toMatchObject({ name: "Kernel Witness verification run policy" });
   });
 });

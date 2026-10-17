@@ -4,7 +4,7 @@
  * "kernel_tracer", collector tetragon) and a CoverageReport that says exactly what was and was not observed.
  * Idempotent (INSERT OR IGNORE by stable ids): re-ingesting the same slice inserts nothing.
  */
-import type { CoverageCategoryEntry, CoverageReport, CoverageSourceEntry, Event, Run } from "@kw/schema";
+import type { CoverageCategoryEntry, CoverageReport, CoverageSourceEntry, Event, PolicyVersion, Run } from "@kw/schema";
 import type { CaptureResult } from "@kw/observer-tetragon";
 import { transaction, type Db } from "../db/connection";
 import * as t from "../db/tables";
@@ -20,6 +20,8 @@ export interface IngestKernelInput {
   /** Extra host-side sources that captured this run (shown in coverage alongside the kernel tracer). */
   hostSources?: { streamJson: boolean; gitDiff: boolean; proxyLog: boolean };
   now: Date;
+  /** Policy in force for this run (verification: base + scenario baseline + tested safeguard version). Stored and linked. */
+  policyVersion?: PolicyVersion | null;
 }
 
 export interface IngestKernelResult {
@@ -124,7 +126,7 @@ export function ingestKernelObservation(db: Db, input: IngestKernelInput): Inges
     task_description: input.task,
     repository_id: null,
     repository_revision: null,
-    policy_version: null,
+    policy_version: input.policyVersion?.id ?? null,
     started_at: cap.stats.started_at,
     ended_at: cap.stats.stopped_at,
     status: "completed",
@@ -137,6 +139,7 @@ export function ingestKernelObservation(db: Db, input: IngestKernelInput): Inges
   let inserted = 0;
   transaction(db, () => {
     const written = new Set<string>();
+    if (input.policyVersion) t.policyVersions.insertOrIgnore(db, input.policyVersion);
     if (t.runs.insertOrIgnore(db, safe.run!)) written.add(redactionKey("runs", run.id));
     if (t.evidence.insertOrIgnore(db, safe.evidence[0]!)) written.add(redactionKey("evidence", cap.evidence.id));
     for (const e of rows)

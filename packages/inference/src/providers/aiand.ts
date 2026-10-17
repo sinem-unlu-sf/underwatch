@@ -1,6 +1,6 @@
 import { redact, scanForLeaks } from "@kw/redaction";
 import type { AskWitnessModelOutput } from "@kw/schema";
-import { askWitnessCacheVariant, askWitnessTemplate, type AskWitnessHistoryEntry, validateAskWitnessOutput } from "../askwitness";
+import { askWitnessCacheVariant, askWitnessTemplate, type AskWitnessCallOptions, type AskWitnessHistoryEntry, validateAskWitnessOutput } from "../askwitness";
 import { type EvidenceBundle, verifyBundleHash } from "../bundle";
 import { createCache, inferenceCacheKey, type InferenceCache } from "../cache";
 import { checkExplanationCitations, checkSafeguardCitations, type CheckedExplanation, type CheckedSafeguardProposal } from "../citations";
@@ -235,8 +235,10 @@ export class AiAndProvider implements InferenceProvider {
     return this.#run(tpl, bundle, validate, opts, opts?.cacheVariant);
   }
 
-  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
-    return this.runTemplate(askWitnessTemplate(question, history, bundle.scope), bundle, validateAskWitnessOutput, { ...opts, cacheVariant: askWitnessCacheVariant(question, history) });
+  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: AskWitnessCallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
+    const { depth, style, brief, ...call } = opts ?? {};
+    const mode = { depth, style, brief };
+    return this.runTemplate(askWitnessTemplate(question, history, bundle.scope, mode), bundle, validateAskWitnessOutput, { ...call, cacheVariant: askWitnessCacheVariant(question, history, mode) });
   }
 
   async health(opts: CallOptions = {}): Promise<InferenceResult<HealthInfo>> {

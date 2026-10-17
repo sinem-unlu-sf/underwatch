@@ -61,7 +61,13 @@ function SettingsBody({ s }: { s: SettingsStatusResponse }) {
           extra={[
             [
               "Active version",
-              s.policy.active_policy_version_id ? <Mono>{s.policy.active_policy_version_id}</Mono> : <span className="text-fg-2">none</span>,
+              s.policy.active_policy_version_id ? (
+                <span>
+                  <Mono>{s.policy.active_policy_version_id}</Mono> <span className="text-fg-2">(built-in Kernel Witness supervised policy)</span>
+                </span>
+              ) : (
+                <span className="text-fg-2">Built-in Kernel Witness supervised policy (no version stored yet; it is recorded on the first live supervised run)</span>
+              ),
             ],
           ]}
         />
@@ -82,7 +88,10 @@ function SettingsBody({ s }: { s: SettingsStatusResponse }) {
               [
                 "Raw evidence kept",
                 s.retention.raw_evidence_retention_days !== null ? (
-                  <Mono>{s.retention.raw_evidence_retention_days} days</Mono>
+                  <span>
+                    <Mono>{s.retention.raw_evidence_retention_days} days</Mono>
+                    {s.retention.status !== "connected" && s.retention.status !== "configured" ? <span className="text-fg-2"> (proposed; not enforced)</span> : null}
+                  </span>
                 ) : (
                   <span className="text-fg-2">no retention period set</span>
                 ),

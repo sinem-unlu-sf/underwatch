@@ -91,6 +91,74 @@ export type GraphCrossRunMatch = z.infer<typeof GraphCrossRunMatch>;
 export const GraphInsights = z.object({ ancestry: z.array(GraphAncestry), cross_run: z.array(GraphCrossRunMatch) });
 export type GraphInsights = z.infer<typeof GraphInsights>;
 
+/**
+ * Key relationships (Addendum C section 5): the 3-6 most important relationship paths for a finding, in plain
+ * language, built ONLY from the graph response (Neo4j query results, or the relational fallback) plus the Kernel
+ * Witness records those nodes stand for (policy rule text, stored verification outcomes). Never a new source of truth:
+ * every step names a node id that the query returned, every hop keeps its edge basis, and inferred links say so.
+ * A relationship supports investigation; it is not proof of an event without the cited evidence.
+ */
+export const KeyRelationshipKind = z.enum([
+  "contradiction",
+  "origin_chain",
+  "policy",
+  "verification",
+  "safeguard",
+  "cross_run",
+  "recurrence",
+  "supporting_evidence",
+  "investigation",
+]);
+export type KeyRelationshipKind = z.infer<typeof KeyRelationshipKind>;
+export const KeyRelationshipStep = z.object({
+  node_id: z.string().min(1),
+  label: GraphNodeLabel,
+  title: z.string(),
+  /** Relationship type that leads INTO this step from the previous one (null for the first step). */
+  via: z.string().nullable(),
+  via_basis: GraphBasis.nullable(),
+  /** True when the node is in this response's `nodes` (it may come from a multi-hop insight query instead). */
+  in_graph: z.boolean(),
+});
+export type KeyRelationshipStep = z.infer<typeof KeyRelationshipStep>;
+export const KeyRelationshipLink = z.object({
+  kind: z.enum(["finding", "run", "run_event", "evidence", "safeguard", "verification"]),
+  id: z.string().min(1),
+  /** Web route; null when the record has no page of its own (evidence opens in the evidence inspector). */
+  href: z.string().nullable(),
+  label: z.string(),
+});
+export type KeyRelationshipLink = z.infer<typeof KeyRelationshipLink>;
+export const KeyRelationship = z.object({
+  id: z.string().min(1),
+  kind: KeyRelationshipKind,
+  /** One plain-language sentence. */
+  text: z.string(),
+  /** Weakest basis along the path (inferred < reported < ai < user < derived < observed). */
+  basis: GraphBasis,
+  /** Why that basis, and what it does NOT establish. */
+  basis_note: z.string(),
+  /** neo4j: from Neo4j query results; kw_records: from Kernel Witness records (relational store). */
+  source: z.enum(["neo4j", "kw_records"]),
+  steps: z.array(KeyRelationshipStep),
+  links: z.array(KeyRelationshipLink),
+});
+export type KeyRelationship = z.infer<typeof KeyRelationship>;
+export const KeyRelationshipsSummary = z.object({
+  finding_id: z.string(),
+  source: z.enum(["neo4j", "relational"]),
+  /** Where the relationships came from, e.g. "From Kernel Witness records, Neo4j unavailable (...)". */
+  detail: z.string(),
+  items: z.array(KeyRelationship).max(6),
+  /** Candidate relationships found but not shown (the full graph still has them). */
+  omitted: z.number().int().nonnegative(),
+  /** Relationship kinds that could not be computed from this source (e.g. process ancestry without Neo4j). */
+  unavailable: z.array(z.string()),
+  /** Standing caveat: relationships are leads for investigation, not proof. */
+  note: z.string(),
+});
+export type KeyRelationshipsSummary = z.infer<typeof KeyRelationshipsSummary>;
+
 export const FindingGraphResponse = z.object({
   finding_id: z.string(),
   source: z.enum(["neo4j", "relational"]),
@@ -101,5 +169,11 @@ export const FindingGraphResponse = z.object({
   truncated: z.boolean(),
   /** Graph-only multi-hop query results (null when source = relational). */
   insights: GraphInsights.nullable(),
+  /** Additive (Addendum C): plain-language summary of the most important relationships in this same response. */
+  key_relationships: KeyRelationshipsSummary.optional(),
 });
 export type FindingGraphResponse = z.infer<typeof FindingGraphResponse>;
+
+/** GET /api/findings/:id/graph/summary: the key relationships alone (same data as FindingGraphResponse.key_relationships). */
+export const FindingGraphSummaryResponse = KeyRelationshipsSummary;
+export type FindingGraphSummaryResponse = KeyRelationshipsSummary;

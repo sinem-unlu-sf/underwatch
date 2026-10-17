@@ -1,5 +1,5 @@
 import type { AskWitnessModelOutput } from "@kw/schema";
-import type { AskWitnessHistoryEntry } from "./askwitness";
+import type { AskWitnessCallOptions, AskWitnessHistoryEntry } from "./askwitness";
 import type { EvidenceBundle } from "./bundle";
 import type { CheckedExplanation, CheckedSafeguardProposal } from "./citations";
 import type { PromptTemplate } from "./prompts";
@@ -78,7 +78,7 @@ export interface InferenceProvider {
    * Ask Witness: one question about one finding's bundle, with truncated prior turns of the same investigation.
    * Returns shape-validated model output only; the caller assigns evidence labels (checkAskWitnessOutput).
    */
-  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>>;
+  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: AskWitnessCallOptions): Promise<InferenceResult<AskWitnessModelOutput>>;
   /** Generic structured call for app-defined prompt templates (see AiAndProvider.runTemplate). */
   runTemplate<T>(tpl: PromptTemplate, bundle: EvidenceBundle, validate: TemplateValidator<T>, opts?: TemplateCallOptions): Promise<InferenceResult<T>>;
 }

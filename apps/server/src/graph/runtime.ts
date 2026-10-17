@@ -10,6 +10,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { isGraphUnavailable, type GraphError, type GraphResult, type KwGraph, type ProjectionReceipt } from "@kw/graph";
 import type { ComponentStatus } from "@kw/schema";
 import type { Db } from "../db/connection";
+import { displayTime } from "../status";
 import { ADDENDUM_CONSTRAINTS, planAddendum, projectAddendum, type AddendumReceipt } from "./addendum";
 import { listRunIds, runBundleFromDb, runIdForFinding, runIdForSafeguard } from "./bundle-from-db";
 
@@ -153,7 +154,7 @@ export function createGraphRuntime(deps: { db: Db; log: FastifyBaseLogger; env: 
       if (!kw) return cached;
       const base = await kw.componentStatus();
       const sync = lastSync
-        ? ` Projection: ${lastSync.ok}/${lastSync.total} run(s) synced (${lastSync.reason}, ${lastSync.at})${lastSync.failed ? `, ${lastSync.failed} failed` : ""}.`
+        ? ` Projection: ${lastSync.ok}/${lastSync.total} run(s) synced (${lastSync.reason}, ${displayTime(lastSync.at)})${lastSync.failed ? `, ${lastSync.failed} failed` : ""}.`
         : " Projection: not synced yet in this process.";
       const fail = failures[0] ? ` Last projection failure: ${failures[0].kind} (${failures[0].reason}, ${failures[0].at}).` : "";
       const degraded = base.status === "connected" && lastSync !== null && lastSync.failed > 0;

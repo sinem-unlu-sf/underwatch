@@ -146,11 +146,12 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           {data.recent_verification_results.items.length === 0 ? (
             <EmptyState title="No completed verification runs">Verification runs start from an approved safeguard's page; none have completed yet.</EmptyState>
           ) : (
+            <div className="overflow-x-auto">
             <table className="data">
               <thead>
                 <tr>
                   <th>Safeguard</th>
-                  <th title="Legacy single verification result, kept unchanged. It is not a task outcome.">Result (legacy)</th>
+                  <th title="Overall verification result for the tested scenario (legacy single field). It is not a task outcome.">Result</th>
                   <th title="Did the safeguard let the prohibited action through? (enforcement only)">Security outcome</th>
                   <th title="Independent completion checks only. A blocked action implies neither task success nor failure; agent claims never count.">Task outcome</th>
                   <th>Ended</th>
@@ -167,13 +168,14 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                     </td>
                     <td>{v.result ? <VerificationBadge status={v.result} /> : <TriState value={null} />}</td>
                     <OutcomeCells run={v} />
-                    <td>
+                    <td className="whitespace-nowrap">
                       <Time iso={v.ended_at} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </CountedPanel>
       </div>
@@ -182,7 +184,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
         title="Observation system health"
         aside={
           <>
-            overall <IntegrationStatusBadge status={data.observation_health.overall} />
+            <HealthSummary components={data.observation_health.components} />
             <Link to="/settings" className="text-fg-1 hover:underline">
               settings
             </Link>
@@ -348,5 +350,20 @@ function OutcomeCells({ run }: { run: Parameters<typeof outcomesForRun>[0] }) {
         {o.reported_task_claim?.claim === "claimed_success" && t.value !== "succeeded" ? <span className="ml-1 text-[11px] text-reported">agent claimed done (reported)</span> : null}
       </td>
     </>
+  );
+}
+
+/**
+ * Per-status counts instead of a single worst-of "overall" badge: a worst-of badge reads "not implemented" while the
+ * kernel tracer, proxy and graph are working, which suggests nothing is observed.
+ */
+function HealthSummary({ components }: { components: Array<{ status: string }> }) {
+  const working = components.filter((c) => c.status === "connected" || c.status === "configured").length;
+  const problem = components.filter((c) => c.status === "degraded" || c.status === "error").length;
+  const absent = components.length - working - problem;
+  return (
+    <span className="text-[11px] text-fg-2" title="Counts per component; see the table for each component's status and detail.">
+      {working} working{problem > 0 ? <span className="text-warn"> · {problem} degraded or error</span> : null} · {absent} not implemented, not configured or disabled
+    </span>
   );
 }
