@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Contrast was checked against the surfaces (WCAG AA for all text tokens except fg-disabled).
+ * Semantic hues: risk = meaningful security risk, warn = needs attention, verified = ONLY verified positive
+ * outcomes, unknown = not observed / not established (always paired with the hatched treatment, never "safe").
+ * reported / observed distinguish the two provenance lanes.
+ */
+@theme {
+  --color-surface-0: #0e0f11;
+  --color-surface-1: #15171a;
+  --color-surface-2: #1d2024;
+  --color-surface-3: #262a2f;
+  --color-fg-0: #eceae4;
+  --color-fg-1: #b6b3ab;
+  --color-fg-2: #8e8c85;
+  --color-fg-disabled: #5e5d58;
+  --color-line: #2a2e34;
+  --color-line-strong: #4a5059;
+  --color-risk: #f2645c;
+  --color-risk-solid: #b8322c;
+  --color-warn: #e3a740;
+  --color-verified: #52c47e;
+  --color-unknown: #a0a7b8;
+  --color-reported: #c6a0f0;
+  --color-observed: #5cb8e6;
+  --color-focus: #7fc4ff;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-surface-0);
+    color: var(--color-fg-0);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+  a {
+    color: inherit;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-focus) 35%, transparent);
+  }
+  input,
+  select,
+  textarea {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* "Unknown / not observed / not established": dashed outline + diagonal hatch. */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-unknown) 16%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+    border: 1px dashed var(--color-unknown);
+  }
+  .field {
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-line-strong);
+    border-radius: 3px;
+    padding: 3px 6px;
+    font-size: 12px;
+    color: var(--color-fg-0);
+    min-height: 26px;
+  }
+  .field:disabled {
+    color: var(--color-fg-disabled);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--color-line-strong);
+    background: var(--color-surface-2);
+    color: var(--color-fg-0);
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    min-height: 26px;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--color-surface-3);
+  }
+  .btn:disabled {
+    color: var(--color-fg-disabled);
+    border-color: var(--color-line);
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--color-fg-0);
+    color: var(--color-surface-0);
+    border-color: var(--color-fg-0);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-fg-1);
+  }
+  .skeleton {
+    background: var(--color-surface-2);
+    border-radius: 2px;
+  }
+  .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-2);
+  }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.data th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--color-fg-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-line-strong);
+    white-space: nowrap;
+  }
+  table.data td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+  }
+  table.data tbody tr:hover {
+    background: var(--color-surface-2);
+  }
+}

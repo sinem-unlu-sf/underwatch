@@ -1,0 +1,16 @@
+# Kernel Witness default egress allowlist (one anchored ERE per line, matched
+# against the request host by tinyproxy; everything else is denied).
+# Source: Claude Code docs network-config.md "Network access requirements"
+# (fetched 2026-10-17), minimized for a headless npm-installed CLI that uses a
+# `claude setup-token` OAuth token, with CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1:
+#   api.anthropic.com   - Claude API requests (required)
+#   platform.claude.com - OAuth token exchange/refresh for claude.ai accounts
+#   claude.ai           - claude.ai account authentication
+# Deliberately NOT allowed: registry.npmjs.org (image built offline of the run),
+# downloads.claude.ai (auto-update disabled), mcp-proxy.anthropic.com (connectors
+# disabled), datadoghq telemetry hosts, statsig/sentry, github.com, code.claude.com.
+# UNVERIFIED: that a setup-token run never needs claude.ai/platform.claude.com, or
+# needs nothing beyond these three hosts; see the authenticated smoke run's proxy log.
+^api\.anthropic\.com$
+^platform\.claude\.com$
+^claude\.ai$

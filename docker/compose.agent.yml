@@ -1,0 +1,102 @@
+# Kernel Witness - controlled execution environment for ONE supervised agent run.
+# Separate from compose.dev.yml (Neo4j etc.). Driven by scripts/agent-smoke.sh;
+# the server's run supervisor is expected to set the same variables.
+#
+#   kw-agent-internal  internal-only network (no route out); the agent lives here.
+#   kw-egress          ordinary bridge; only the egress proxy is attached to it.
+#   egress-proxy       the agent's only route out (default-deny domain allowlist).
+#   agent              Claude Code headless, non-root, read-only policy, no host
+#                      evidence mounts; stream-json goes to STDOUT for the host.
+#
+# Required env (no defaults on purpose, so a mis-wired run fails closed):
+#   KW_POLICY_DIR        host dir mounted read-only at /etc/claude-code
+#   KW_HOOK_FORWARDER    host file mounted read-only at /opt/kw/kw-hook.mjs
+#   KW_WS_VOLUME         pre-populated docker volume mounted at /workspace
+#   KW_HOOK_VOLUME       docker volume for the (agent-reported) hook spool
+# Optional: KW_EGRESS_ALLOWLIST, KW_AGENT_SUBNET, KW_TASK, KW_MODEL, KW_MAX_TURNS.
+# Secrets: CLAUDE_CODE_OAUTH_TOKEN is passed through ONLY to the agent service, from
+# the invoking process environment (never written in this file or in images).
+name: kw-agent
+
+x-kw-labels: &kw-labels
+  kw-dev: "1"
+
+networks:
+  kw-agent-internal:
+    name: kw-agent-internal
+    internal: true
+    labels: *kw-labels
+    ipam:
+      config:
+        - subnet: ${KW_AGENT_SUBNET:-10.231.7.0/24}
+  kw-egress:
+    name: kw-egress
+    labels: *kw-labels
+
+volumes:
+  workspace:
+    name: ${KW_WS_VOLUME:?KW_WS_VOLUME is required}
+    external: true
+  hooks:
+    name: ${KW_HOOK_VOLUME:?KW_HOOK_VOLUME is required}
+    external: true
+
+services:
+  egress-proxy:
+    build:
+      context: ./egress-proxy
+      labels: *kw-labels
+    image: kw-egress-proxy:1
+    container_name: kw-egress-proxy
+    labels: *kw-labels
+    environment:
+      KW_ALLOW_SUBNET: ${KW_AGENT_SUBNET:-10.231.7.0/24}
+    volumes:
+      - ${KW_EGRESS_ALLOWLIST:-./egress-proxy/allowlist.ere}:/etc/kw-egress/allowlist.ere:ro
+    networks:
+      kw-agent-internal: {}
+      kw-egress: {}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]   # tinyproxy drops to user nobody
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 128m
+
+  agent:
+    profiles: [agent]          # only started via `docker compose run agent`
+    build:
+      context: ./agent
+      labels: *kw-labels
+    image: kw-agent:2.1.302
+    labels: *kw-labels
+    depends_on: [egress-proxy]
+    user: "1000:1000"
+    init: true
+    networks:
+      kw-agent-internal: {}
+    environment:
+      KW_TASK: ${KW_TASK:-}
+      KW_MODEL: ${KW_MODEL:-haiku}
+      KW_MAX_TURNS: ${KW_MAX_TURNS:-3}
+      KW_HOOK_LOG: /kw-hooks/hooks.ndjson
+      HTTPS_PROXY: http://kw-egress-proxy:8888
+      HTTP_PROXY: http://kw-egress-proxy:8888
+      https_proxy: http://kw-egress-proxy:8888
+      http_proxy: http://kw-egress-proxy:8888
+      NO_PROXY: localhost,127.0.0.1
+      no_proxy: localhost,127.0.0.1
+      # Bare key = pass-through from the invoking environment (omitted when unset).
+      # Never run `docker compose config` with the token exported: it would print it.
+      CLAUDE_CODE_OAUTH_TOKEN:
+    volumes:
+      - workspace:/workspace
+      - hooks:/kw-hooks
+      - ${KW_POLICY_DIR:?KW_POLICY_DIR is required}:/etc/claude-code:ro
+      - ${KW_HOOK_FORWARDER:?KW_HOOK_FORWARDER is required}:/opt/kw/kw-hook.mjs:ro
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    mem_limit: 2g

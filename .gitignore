@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# Local runtime state: SQLite DB, auth token, workspaces, evidence blobs, policy overlays
+data/*
+!data/.gitkeep
+.env*
+!.env.example
+.DS_Store
+coverage/
