@@ -7,7 +7,7 @@ import { humanize, truncate } from "../../lib/format";
 
 /**
  * Side-by-side "Agent reported | Independently observed" comparison for one finding. Rows come only from the finding's
- * related events and the run's stored correlation records (derived by the Kernel Witness correlator). Nothing is paired
+ * related events and the run's stored correlation records (derived by the Underwatch correlator). Nothing is paired
  * by guesswork: an event without a correlation gets its own row, explicitly marked as having no counterpart.
  */
 
@@ -158,7 +158,7 @@ function MatchNote({ row }: { row: ComparisonRow }) {
   if (!c) return null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-fg-2">
-      <Badge tone={c.match === "uncertain" ? "unknown" : "muted"} title="Correlation by Kernel Witness (derived, not raw evidence)">
+      <Badge tone={c.match === "uncertain" ? "unknown" : "muted"} title="Correlation by Underwatch (derived, not raw evidence)">
         correlation: {humanize(c.match)} · {c.confidence}
       </Badge>
       {c.note ? <span>{truncate(c.note, 140)}</span> : null}
@@ -232,7 +232,7 @@ export function ReportedVsObservedPanel({
           Reported vs observed
         </h2>
         <p className="mt-0.5 text-[11.5px] text-fg-2">
-          What the agent said it did, next to what was captured independently of it. Rows are aligned only where the Kernel Witness correlator
+          What the agent said it did, next to what was captured independently of it. Rows are aligned only where the Underwatch correlator
           recorded a match (derived); click any event to inspect its record.
         </p>
         {correlationStatus === "loading" ? <p className="mt-1 text-[11px] text-fg-2">Loading correlation records…</p> : null}
@@ -386,7 +386,7 @@ export function AgentSaidKernelSaw({
           </div>
           {pair.correlation ? (
             <p className="mt-1 text-[11px] text-fg-2">
-              Paired by the Kernel Witness correlator (derived): {humanize(pair.correlation.match)}, {pair.correlation.confidence} confidence.
+              Paired by the Underwatch correlator (derived): {humanize(pair.correlation.match)}, {pair.correlation.confidence} confidence.
               {pair.viaCorrelator ? " The observed event is linked through this match; the finding itself does not cite it." : null}
             </p>
           ) : null}

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Kernel Witness LLM credential broker (TRUSTED zone).
+// Underwatch LLM credential broker (TRUSTED zone).
 //
 // A narrowly scoped reverse proxy that sits on the agent's internal-only network and
 // is the agent's ONLY route to the Claude API. The real Claude credential lives only

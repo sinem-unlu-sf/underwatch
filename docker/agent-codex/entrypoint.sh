@@ -35,7 +35,7 @@ metrics_exporter = "none"
 trace_exporter = "none"
 
 [model_providers.kwbroker]
-name = "ai& via Kernel Witness credential broker"
+name = "ai& via Underwatch credential broker"
 base_url = "${KW_LLM_BASE_URL}"
 wire_api = "responses"
 env_key = "AIAND_API_KEY"

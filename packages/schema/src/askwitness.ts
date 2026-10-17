@@ -23,9 +23,9 @@ export const InvestigationStatus = z.enum(["active", "closed"]);
 export type InvestigationStatus = z.infer<typeof InvestigationStatus>;
 
 /**
- * What an investigation is about. finding: one finding (v1). run: one agent run. workspace: all of Kernel Witness's own
+ * What an investigation is about. finding: one finding (v1). run: one agent run. workspace: all of Underwatch's own
  * records (findings, runs, coverage, safeguards, verification results, digest). Follow-ups always stay in their scope;
- * retrieval is deterministic and reads Kernel Witness's database only (never repository files, the web, or model SQL).
+ * retrieval is deterministic and reads Underwatch's database only (never repository files, the web, or model SQL).
  */
 export const InvestigationScopeKind = z.enum(["finding", "run", "workspace"]);
 export type InvestigationScopeKind = z.infer<typeof InvestigationScopeKind>;
@@ -140,11 +140,11 @@ export type EvidenceSupport = z.infer<typeof EvidenceSupport>;
 export const EVIDENCE_SUPPORT_LABELS: Record<EvidenceSupport, string> = {
   observed_evidence: "Backed by observed evidence",
   reported_evidence_only: "Agent-reported evidence only",
-  derived_only: "Kernel Witness analysis only",
+  derived_only: "Underwatch analysis only",
   unsupported: "Unsupported (no valid citation)",
 };
 
-/** Kinds of action claims that need a confirming Kernel Witness record (Addendum C: never claim unconfirmed actions). */
+/** Kinds of action claims that need a confirming Underwatch record (Addendum C: never claim unconfirmed actions). */
 export const ActionClaimKind = z.enum(["verified", "tested", "applied", "fixed"]);
 export type ActionClaimKind = z.infer<typeof ActionClaimKind>;
 
@@ -202,7 +202,7 @@ export const AskWitnessAnswer = z.object({
   evidence_limitations: z.array(z.string()).optional(),
   /**
    * App-generated (Addendum C): statements in the AI text that say an action was performed / applied / tested /
-   * verified / fixed while no Kernel Witness record in the bundle confirms it. Optional for compatibility.
+   * verified / fixed while no Underwatch record in the bundle confirms it. Optional for compatibility.
    */
   action_claim_flags: z.array(ActionClaimFlag).optional(),
 });
@@ -248,7 +248,7 @@ export type InvestigationTurn = z.infer<typeof InvestigationTurn>;
 /** Display index so every cited id in an answer can be opened (event inspector / evidence panel / finding). */
 export const BundleEvidenceRef = z.object({
   evidence_id: z.string(),
-  /** coverage / safeguard / related_finding: Ask Witness context items (additive; Kernel Witness records, basis "derived"). */
+  /** coverage / safeguard / related_finding: Ask Witness context items (additive; Underwatch records, basis "derived"). */
   kind: z.enum(["finding", "event", "evidence", "policy_rule", "coverage", "safeguard", "related_finding", "run", "overview", "verification", "digest"]),
   basis: EventBasis.nullable(),
   source: z.string().nullable(),
@@ -268,7 +268,7 @@ export const ASK_WITNESS_RUN_SUGGESTED_QUESTIONS = [
   "What could the observers not see in this run?",
 ] as const;
 
-/** Workspace-scope starters (questions across all of Kernel Witness's records). */
+/** Workspace-scope starters (questions across all of Underwatch's records). */
 export const ASK_WITNESS_WORKSPACE_SUGGESTED_QUESTIONS = [
   "What was blocked across all runs and what is still uncertain?",
   "Which open findings are the most severe?",
@@ -414,7 +414,7 @@ export function checkAskWitnessOutput(out: AskWitnessModelOutput, bases: Readonl
 
 // ---------------------------------------------------------------------------------------------------------------
 // Action-claim check (Addendum C section 4): the AI must not say that something was performed, applied, tested,
-// verified or fixed unless a Kernel Witness record in the bundle that was sent confirms it.
+// verified or fixed unless a Underwatch record in the bundle that was sent confirms it.
 // ---------------------------------------------------------------------------------------------------------------
 
 /** Ids of bundle records that confirm each kind of action (empty = no record confirms it). */
@@ -468,10 +468,10 @@ const HEDGE =
   /\b(?:not|never|no|none|nothing|cannot|unverified|untested|unapplied|yet|pending|whether|if|until|once|would|should|could|might|may|must|can|need|needs|recommend\w*|propos\w*|consider|unless|suggest\w*|plan(?:ned)?|intended|without|unknown|unclear)\b|n't\b|\bto\s+be\b/i;
 
 const CLAIM_REASON: Record<ActionClaimKind, string> = {
-  verified: "No Kernel Witness record in the evidence sent shows a passed verification; treat this as unconfirmed.",
-  tested: "No Kernel Witness record in the evidence sent shows that a test or verification run was carried out.",
-  applied: "No Kernel Witness record in the evidence sent shows that a safeguard or change was applied.",
-  fixed: "No Kernel Witness record in the evidence sent shows that this was fixed or resolved.",
+  verified: "No Underwatch record in the evidence sent shows a passed verification; treat this as unconfirmed.",
+  tested: "No Underwatch record in the evidence sent shows that a test or verification run was carried out.",
+  applied: "No Underwatch record in the evidence sent shows that a safeguard or change was applied.",
+  fixed: "No Underwatch record in the evidence sent shows that this was fixed or resolved.",
 };
 
 function sentences(text: string): string[] {

@@ -131,7 +131,7 @@ function outcomePhrase(o: LogicalObservation): string {
     case "blocked":
       switch (v.blockedBy) {
         case "kw_enforcement":
-          return "blocked by Kernel Witness enforcement";
+          return "blocked by Underwatch enforcement";
         case "proxy":
           return "blocked by the egress proxy";
         case "sandbox":
@@ -139,7 +139,7 @@ function outcomePhrase(o: LogicalObservation): string {
         case "agent_layer":
           return "blocked by Claude Code permission rules";
         default:
-          return `blocked by the environment${v.errno ? ` (${v.errno})` : ""}; no Kernel Witness enforcement record`;
+          return `blocked by the environment${v.errno ? ` (${v.errno})` : ""}; no Underwatch enforcement record`;
       }
     case "failed":
       return `failed${v.errno ? ` (${v.errno})` : ""}; not a permission block`;
@@ -435,7 +435,7 @@ export function runRules(inp: RuleInputs): CandidateFinding[] {
         ruleId: RULES.D4agent,
         clusterKey: `call:${call.toolUseId}`,
         title: `${call.toolName} of ${resource} denied by policy ${intent.record.deciding_rule_id}: blocked by Claude Code permission rules`,
-        description: `The agent requested ${call.toolName} on ${resource}; Kernel Witness policy rule ${intent.record.deciding_rule_id} denies it. Claude Code recorded a permission denial, and no corresponding action was observed while ${coverageCatFor(kind)} coverage was active. This establishes a recorded denied attempt, not the agent's intent.`,
+        description: `The agent requested ${call.toolName} on ${resource}; Underwatch policy rule ${intent.record.deciding_rule_id} denies it. Claude Code recorded a permission denial, and no corresponding action was observed while ${coverageCatFor(kind)} coverage was active. This establishes a recorded denied attempt, not the agent's intent.`,
         nextStep: "Agent-layer rules do not cover subprocesses that open files themselves; consider observation-layer enforcement for this resource.",
         claims: [
           reportedClaim(inp.coverage, "denial record"),

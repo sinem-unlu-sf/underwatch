@@ -1,6 +1,6 @@
 # @kw/redaction
 
-Pattern-based secret redaction for everything Kernel Witness reads out of agent logs. It is pure: no I/O, no network,
+Pattern-based secret redaction for everything Underwatch reads out of agent logs. It is pure: no I/O, no network,
 no DOM or Node types. Configuration loading takes an injected file reader.
 
 ## Where it runs (redaction is the default)

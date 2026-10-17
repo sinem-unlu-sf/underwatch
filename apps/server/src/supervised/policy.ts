@@ -1,5 +1,5 @@
 /**
- * The Kernel Witness supervised policy for live runs, in two forms that must stay in step:
+ * The Underwatch supervised policy for live runs, in two forms that must stay in step:
  *  - Claude Code managed settings (docker/agent/policy/managed-settings.json + the overlay below), mounted read-only
  *    at /etc/claude-code in the agent container. This is what Claude Code enforces.
  *  - A PolicyVersion (KW policy rules) that @kw/analysis evaluates observed/reported actions against.
@@ -131,7 +131,7 @@ export function buildSupervisedPolicy(base: Record<string, unknown>, overlays: S
       is_fixture: false,
       policy_id: "kw-supervised",
       version: `kw-supervised@${contentSha.slice(0, 12)}`,
-      name: "Kernel Witness supervised policy",
+      name: "Underwatch supervised policy",
       description:
         "Policy for live supervised runs: Claude Code managed settings (read-only) with Read/Edit/Write/Bash allowed in the disposable workspace, Read denied for .env and secrets/, .claude/ writes denied, internal-only network (egress default-deny is enforced by the network, not modeled as a rule). Read deny rules do not stop interpreter subprocesses (no OS sandbox in the container)." +
         (inForce.length ? ` Applied safeguards in force for runs under this version: ${inForce.join("; ")}.` : ""),

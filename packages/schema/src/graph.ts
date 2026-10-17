@@ -138,7 +138,7 @@ export const KeyRelationship = z.object({
   basis: GraphBasis,
   /** Why that basis, and what it does NOT establish. */
   basis_note: z.string(),
-  /** neo4j: from Neo4j query results; kw_records: from Kernel Witness records (relational store). */
+  /** neo4j: from Neo4j query results; kw_records: from Underwatch records (relational store). */
   source: z.enum(["neo4j", "kw_records"]),
   steps: z.array(KeyRelationshipStep),
   links: z.array(KeyRelationshipLink),
@@ -147,7 +147,7 @@ export type KeyRelationship = z.infer<typeof KeyRelationship>;
 export const KeyRelationshipsSummary = z.object({
   finding_id: z.string(),
   source: z.enum(["neo4j", "relational"]),
-  /** Where the relationships came from, e.g. "From Kernel Witness records, Neo4j unavailable (...)". */
+  /** Where the relationships came from, e.g. "From Underwatch records, Neo4j unavailable (...)". */
   detail: z.string(),
   items: z.array(KeyRelationship).max(6),
   /** Candidate relationships found but not shown (the full graph still has them). */

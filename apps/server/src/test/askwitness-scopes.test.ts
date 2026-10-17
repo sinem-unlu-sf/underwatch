@@ -1,5 +1,5 @@
 /**
- * Ask Witness RUN and WORKSPACE scopes: deterministic, capped retrieval from Kernel Witness's own records only;
+ * Ask Witness RUN and WORKSPACE scopes: deterministic, capped retrieval from Underwatch's own records only;
  * app-side citation validation and support labels; idempotency; ai& unavailable; prompt injection; status honesty.
  * ai& is a fake HTTP transport; nothing here touches the network.
  */
@@ -97,7 +97,7 @@ describe("scoped retrieval", () => {
     expect(runs.map((r) => r.run_id)).toEqual([RUN04]);
   });
 
-  it("workspace scope: capped, only Kernel Witness records, deterministic matching", async () => {
+  it("workspace scope: capped, only Underwatch records, deterministic matching", async () => {
     const c = await setup();
     const ev = forWorkspace(c.app.kw, "What was blocked across all runs and what is still uncertain?");
     expect(ev.bundle.allowed_ids.length).toBeLessThanOrEqual(40);
@@ -164,7 +164,7 @@ describe("POST /api/investigations (workspace) and /api/runs/:id/investigations"
     expect(a.unsupported_claims[0].invalid_evidence_ids).toEqual(["evt_does_not_exist", "/etc/passwd"]);
     expect(a.evidence_check.invalid_ids).toEqual(expect.arrayContaining(["evt_does_not_exist", "/etc/passwd", "fnd_other_workspace_secret"]));
     expect(a.evidence_limitations.join(" ")).toMatch(/capped selection/);
-    expect(r.body.turn.prompt_version).toBe("kw.ask-witness-scoped@2");
+    expect(r.body.turn.prompt_version).toBe("kw.ask-witness-scoped@3");
 
     const list = await getJson(c.app, `${apiPaths.investigations()}?scope=workspace`);
     expect(list.body.items).toHaveLength(1);
@@ -204,7 +204,7 @@ describe("POST /api/investigations (workspace) and /api/runs/:id/investigations"
     const r = await postJson(c.app, apiPaths.investigations(), { question: "Anything blocked?", client_request_id: "ws-null-0001" });
     expect(r.status).toBe(200);
     expect(r.body.turn).toMatchObject({ status: "ai_unavailable", answer: null, error: { code: "not_configured" } });
-    expect(r.body.turn.error.message).toMatch(/Kernel Witness records are unchanged/);
+    expect(r.body.turn.error.message).toMatch(/Underwatch records are unchanged/);
     expect(tableCount(c.db, "investigation_turns")).toBe(1);
     expect(JSON.stringify(c.db.prepare("SELECT * FROM findings ORDER BY id").all())).toBe(before);
     await c.close();

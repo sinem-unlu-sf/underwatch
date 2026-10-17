@@ -1,9 +1,9 @@
-# Kernel Witness
+# Underwatch
 
 **Independent, kernel-level evidence of what your AI coding agent actually did, compared with what it says it did,
 turned into safeguards you can test.**
 
-Kernel Witness runs Claude Code in a disposable container and observes it from outside: Tetragon (eBPF) in the
+Underwatch runs Claude Code in a disposable container and observes it from outside: Tetragon (eBPF) in the
 kernel, plus a default-deny egress proxy and a host-side git diff. It puts the agent's reported actions next to the
 observed ones, flags the gaps, and lets you investigate them in a Neo4j evidence graph. **Ask Witness** (built on
 ai&) answers questions with cited evidence. You can then turn an incident into a safeguard (a CLAUDE.md instruction,
@@ -60,10 +60,10 @@ If Neo4j is down, everything else works; the graph panel says it is unavailable 
 ### 3. Claude Code token for the supervised agent
 
 ```sh
-mkdir -p ~/.kernel-witness && chmod 700 ~/.kernel-witness
+mkdir -p ~/.underwatch && chmod 700 ~/.underwatch
 claude setup-token                                   # copy the printed token
-pbpaste > ~/.kernel-witness/claude-oauth-token       # or paste it into the file in an editor
-chmod 600 ~/.kernel-witness/claude-oauth-token
+pbpaste > ~/.underwatch/claude-oauth-token       # or paste it into the file in an editor
+chmod 600 ~/.underwatch/claude-oauth-token
 ```
 
 Only the verification harness reads this file. It writes the token to a per-run 0600 file mounted into the broker
@@ -106,7 +106,7 @@ re-imports fixtures idempotently without deleting anything.
    read `.env` (restricted case) and fix a README typo (legitimate case). The result shows the **security outcome**
    and the **task outcome** separately, each with its evidence.
 
-Kernel Witness writes only to `CLAUDE.md` files inside the demo workspace (`data/workspaces/demo-repo`), and only
+Underwatch writes only to `CLAUDE.md` files inside the demo workspace (`data/workspaces/demo-repo`), and only
 after you approve a visible diff. Registering your own folders is off unless the server runs with
 `KW_ALLOW_USER_WORKSPACES=1`.
 
@@ -178,7 +178,7 @@ flowchart LR
   compare-and-swap with stored before/after content for rollback. Symlinks and `..` are refused.
 - **AI.** Evidence is redacted before it reaches ai&. Model output is schema-validated and citations are checked
   against the bundle. AI text is labeled AI-generated; the model never decides facts or verification outcomes.
-- **Credentials.** The Claude token (`~/.kernel-witness/`, mode 600) is handed only to the per-run credential
+- **Credentials.** The Claude token (`~/.underwatch/`, mode 600) is handed only to the per-run credential
   broker; the agent sees a per-run placeholder. The ai& key (`.env.local`) is used server-side for Ask Witness (and,
   for experimental Codex runs, held by the broker the same way). Neither is logged or served.
 

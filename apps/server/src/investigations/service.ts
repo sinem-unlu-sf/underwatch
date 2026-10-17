@@ -89,7 +89,7 @@ export function withActionClaimCheck(answer: AskWitnessAnswer, items: Parameters
   const limitations = [...(answer.evidence_limitations ?? [])];
   if (flags.length > 0) {
     limitations.push(
-      `${flags.length} AI statement(s) say an action was performed, applied, tested, verified or fixed, but no Kernel Witness record in the evidence sent confirms it; they are flagged as unconfirmed.`,
+      `${flags.length} AI statement(s) say an action was performed, applied, tested, verified or fixed, but no Underwatch record in the evidence sent confirms it; they are flagged as unconfirmed.`,
     );
   }
   return { ...answer, evidence_limitations: limitations, action_claim_flags: flags };
@@ -144,7 +144,7 @@ export function evidenceLimitations(ev: EvidenceBundleResult, answer: AskWitness
   const bases = [...ev.bases.values()];
   const cov = ev.bundle.items.find((i) => i.kind === "coverage");
   if (!bases.includes("observed")) {
-    out.push("The evidence sent contains no independently observed events or records for this finding; statements about what actually happened rest on agent reports or Kernel Witness analysis only.");
+    out.push("The evidence sent contains no independently observed events or records for this finding; statements about what actually happened rest on agent reports or Underwatch analysis only.");
   }
   if (cov) {
     const level = String(cov.fields.coverage_level);
@@ -166,7 +166,7 @@ export function evidenceLimitations(ev: EvidenceBundleResult, answer: AskWitness
   }
   if (answer.unsupported_claims.length > 0) out.push(`${answer.unsupported_claims.length} statement(s) the AI presented as facts had no valid citation and were moved to unsupported claims.`);
   if (answer.insufficient_evidence && !modelSaidInsufficient) {
-    out.push("Kernel Witness marked this answer as insufficient: no stated fact is backed by a valid citation to observed or agent-reported evidence.");
+    out.push("Underwatch marked this answer as insufficient: no stated fact is backed by a valid citation to observed or agent-reported evidence.");
   }
   return out;
 }
@@ -177,10 +177,10 @@ export function scopedLimitations(ev: ScopedBundleResult, answer: AskWitnessAnsw
   const bases = [...ev.bases.values()];
   out.push(
     ev.scope.kind === "workspace"
-      ? `This answer used a capped selection of ${ev.bundle.items.length} Kernel Witness record(s) chosen deterministically from the question${ev.selection.matched_terms.length > 0 ? ` (matched: ${ev.selection.matched_terms.join(", ")})` : " (no matching terms; newest open findings were used)"}, not every record.`
+      ? `This answer used a capped selection of ${ev.bundle.items.length} Underwatch record(s) chosen deterministically from the question${ev.selection.matched_terms.length > 0 ? ` (matched: ${ev.selection.matched_terms.join(", ")})` : " (no matching terms; newest open findings were used)"}, not every record.`
       : `This answer used a capped selection of ${ev.bundle.items.length} record(s) from this run, not its full event log.`,
   );
-  if (!bases.includes("observed")) out.push("The records sent contain no independently observed events; statements about what actually happened rest on agent reports or Kernel Witness analysis only.");
+  if (!bases.includes("observed")) out.push("The records sent contain no independently observed events; statements about what actually happened rest on agent reports or Underwatch analysis only.");
   const weak = ev.coverage_levels.filter((l) => l !== "complete");
   if (weak.length > 0) out.push(`Observation coverage is not complete (${[...new Set(weak)].join(", ")}), so missing observed events do not prove that an action did not happen.`);
   const om = ev.bundle.omitted;
@@ -190,7 +190,7 @@ export function scopedLimitations(ev: ScopedBundleResult, answer: AskWitnessAnsw
   if (answer.evidence_check.invalid > 0) out.push(`The AI cited ${answer.evidence_check.invalid} id(s) that were not in the records sent; they are flagged as invalid and support nothing.`);
   if (answer.unsupported_claims.length > 0) out.push(`${answer.unsupported_claims.length} statement(s) the AI presented as facts had no valid citation and were moved to unsupported claims.`);
   if (answer.insufficient_evidence && !modelSaidInsufficient) {
-    out.push("Kernel Witness marked this answer as insufficient: no stated fact is backed by a valid citation to observed or agent-reported evidence (Kernel Witness analysis alone does not establish what happened).");
+    out.push("Underwatch marked this answer as insufficient: no stated fact is backed by a valid citation to observed or agent-reported evidence (Underwatch analysis alone does not establish what happened).");
   }
   return out;
 }
@@ -347,7 +347,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
       status = answerValue.insufficient_evidence ? "insufficient_evidence" : "answered";
     } else {
       ({ status, error } = failureToTurn(result));
-      if (error) error = { ...error, message: error.message.replace("The finding and its evidence are unchanged.", "Kernel Witness records are unchanged.") };
+      if (error) error = { ...error, message: error.message.replace("The finding and its evidence are unchanged.", "Underwatch records are unchanged.") };
     }
     const at = ctx.now().toISOString();
     const meta = result.meta as Partial<typeof result.meta> | undefined;
@@ -477,7 +477,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
         return {
           investigation,
           finding: null,
-          scope: { kind: investigation.scope_kind, id: investigation.scope_id, label: run ? (run.label ?? run.id) : "All Kernel Witness records" },
+          scope: { kind: investigation.scope_kind, id: investigation.scope_id, label: run ? (run.label ?? run.id) : "All Underwatch records" },
           turns: turns.map(publicTurn),
           evidence_index: dedupeRefs(turns.flatMap((t) => t.evidence_index)),
           ai: aiStatus(ctx),

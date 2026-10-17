@@ -1,4 +1,4 @@
-# Kernel Witness - disposable agent image (UNTRUSTED zone).
+# Underwatch - disposable agent image (UNTRUSTED zone).
 # Runs Claude Code headless as non-root "agent" (uid 1000) in /workspace.
 # Contains NO credentials. Policy (/etc/claude-code), the hook forwarder
 # (/opt/kw/kw-hook.mjs) and the workspace are provided at runtime, read-only

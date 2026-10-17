@@ -177,7 +177,7 @@ function statusFor(spec: ActionSpec, sgs: BriefSafeguardInfo[], findingStatus: s
   if (spec.mechanism === null) {
     return {
       status: "proposed",
-      status_basis: `Recommendation only; Kernel Witness keeps no record that this step was performed. Finding status is ${q(findingStatus)}.`,
+      status_basis: `Recommendation only; Underwatch keeps no record that this step was performed. Finding status is ${q(findingStatus)}.`,
       safeguard_id: null,
       verification_run_id: null,
     };
@@ -245,7 +245,7 @@ const TERMS: Record<string, BriefTerm> = {
   kernel: { term: "kernel-observed", meaning: "Seen by the Linux kernel tracer (Tetragon) in the agent's container, which sees every process, including scripts the agent starts." },
   reported: { term: "agent-reported", meaning: "What the agent itself said or logged (tool calls, transcript, final message)." },
   mismatch: { term: "outcome mismatch", meaning: "The agent's claim about a result (e.g. tests pass, nothing was accessed) contradicts an independently observed record." },
-  correlation: { term: "correlation", meaning: "Kernel Witness's pairing of an agent-reported action with an observed event. Uncertain means the pairing could not be established." },
+  correlation: { term: "correlation", meaning: "Underwatch's pairing of an agent-reported action with an observed event. Uncertain means the pairing could not be established." },
   verified: { term: "verified for tested scenario", meaning: "A recorded verification run passed for one specific scenario; it does not prove the safeguard works in every case." },
 };
 
@@ -327,7 +327,7 @@ function templateFor(cat: FindingDetailResponse["finding"]["category"], c: Ctx):
       return { problem, why, specs, terms: [TERMS.rule!, TERMS.observed!, ...(c.kernelObserved ? [TERMS.kernel!] : []), TERMS.verified!] };
     }
     case "unreported_observed_action": {
-      const problem = `Kernel Witness independently observed activity on ${res}${c.route ? ` by ${c.route}` : ""}${where}, but the ${c.agent}'s own report never mentions it.`;
+      const problem = `Underwatch independently observed activity on ${res}${c.route ? ` by ${c.route}` : ""}${where}, but the ${c.agent}'s own report never mentions it.`;
       const why = `If the agent does things it does not report, its summary cannot be trusted as a record of what changed${SENSITIVE.test(res) ? ", and this action touched a sensitive file" : ""}. "Independently observed" means a collector outside the agent recorded it.`;
       const specs: ActionSpec[] = [
         { text: `Check the observed event(s) on ${res} and decide whether the action was needed for the task; then confirm or dismiss this finding.`, mechanism: null },
@@ -347,7 +347,7 @@ function templateFor(cat: FindingDetailResponse["finding"]["category"], c: Ctx):
       return { problem, why, specs, terms: [TERMS.mismatch!, TERMS.reported!, TERMS.observed!] };
     }
     case "change_mismatch": {
-      const problem = `The repository changes Kernel Witness observed${where} do not match the changes the ${c.agent} reported${c.resource ? ` (${res})` : ""}: ${q(c.title)}.`;
+      const problem = `The repository changes Underwatch observed${where} do not match the changes the ${c.agent} reported${c.resource ? ` (${res})` : ""}: ${q(c.title)}.`;
       const why = "Changes the agent did not report can slip into a commit without review; the agent's summary is not a reliable list of what changed.";
       const specs: ActionSpec[] = [
         { text: `Review the observed diff${c.resource ? ` for ${res}` : ""} before committing and revert anything the task did not need.`, mechanism: null },
@@ -357,10 +357,10 @@ function templateFor(cat: FindingDetailResponse["finding"]["category"], c: Ctx):
       return { problem, why, specs, terms: [TERMS.reported!, TERMS.observed!] };
     }
     case "uncertain_correlation": {
-      const problem = `Kernel Witness could not reliably match activity on ${res}${where} to an action the ${c.agent} reported: ${q(c.title)}.`;
+      const problem = `Underwatch could not reliably match activity on ${res}${where} to an action the ${c.agent} reported: ${q(c.title)}.`;
       const why = "This is an evidence gap, not a confirmed violation: neither safe behavior nor a violation is established, so the run cannot be fully trusted yet. Correlation means pairing a reported action with an observed event.";
       const specs: ActionSpec[] = [
-        { text: "Re-run the task as a Kernel Witness supervised run so the kernel observer can attribute the activity to a process.", mechanism: null },
+        { text: "Re-run the task as a Underwatch supervised run so the kernel observer can attribute the activity to a process.", mechanism: null },
         { text: `Check the observation coverage caveats for this run and enable the missing collector before relying on it.`, mechanism: null },
         { text: "Add a CLAUDE.md instruction asking the agent to name the tool or command used for each action, so records can be matched (guidance only; it blocks nothing).", mechanism: "claude_md_instruction" },
       ];
@@ -412,13 +412,13 @@ export function buildFindingBrief(input: BriefInput): FindingBrief {
   const keyEvidence = [...new Set([...finding.evidence_ids, ...evidence.map((e) => e.id)])].slice(0, 5);
   const evidenceText =
     `${plural(reported.length, "agent-reported event")}, ${plural(observed.length, "independently observed event")}${kernel.length ? ` (${kernel.length} kernel-observed)` : ""}` +
-    ` and ${plural(derived.length, "Kernel Witness analysis record")}; ${plural(evidence.length, "evidence record")}. Observation coverage for this run: ${level}.` +
+    ` and ${plural(derived.length, "Underwatch analysis record")}; ${plural(evidence.length, "evidence record")}. Observation coverage for this run: ${level}.` +
     (isFixture ? " These are hand-labeled fixture records, not a live capture." : "");
 
   // Uncertainty ---------------------------------------------------------------------------------------------------
   const uncertainty: BriefUncertainty[] = [];
   if (isFixture) uncertainty.push({ kind: "fixture_data", text: "Fixture data: this finding and its evidence are hand-labeled fixture records, not captured from a live run." });
-  if (finding.confidence !== "high") uncertainty.push({ kind: "confidence", text: `Kernel Witness rated its confidence in this finding ${finding.confidence}.` });
+  if (finding.confidence !== "high") uncertainty.push({ kind: "confidence", text: `Underwatch rated its confidence in this finding ${finding.confidence}.` });
   if (level !== "complete") uncertainty.push({ kind: "partial_coverage", text: `Observation coverage is ${level}: some activity may not have been recorded, so absence of an event proves nothing.` });
   const lossyHay = JSON.stringify([coverage ?? null, events.map((e) => e.limitations), finding.missing_information]);
   if (/\blossy\b/i.test(lossyHay)) uncertainty.push({ kind: "lossy_kernel_capture", text: "The kernel capture was lossy (Tetragon dropped events during the run); a missing event cannot be ruled out." });

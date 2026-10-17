@@ -449,7 +449,7 @@ function AskError({ error }: { error: unknown }) {
     return (
       <div role="alert" className="rounded-[3px] border border-warn/50 bg-warn/10 p-2 text-[12px] text-fg-1">
         <span className="font-medium text-warn">ai& is unavailable. </span>
-        {e.message} The records are unchanged; the rest of Kernel Witness works without ai&.
+        {e.message} The records are unchanged; the rest of Underwatch works without ai&.
       </div>
     );
   }

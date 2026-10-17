@@ -1,4 +1,4 @@
-# Kernel Witness egress proxy (TRUSTED zone). Attached to the agent's internal-only
+# Underwatch egress proxy (TRUSTED zone). Attached to the agent's internal-only
 # network and to an egress bridge; it is the agent's only route out.
 # Default-deny domain allowlist (tinyproxy ERE filter). Every request line and every
 # allow/deny decision is logged to stderr, which the HOST streams with `docker logs`

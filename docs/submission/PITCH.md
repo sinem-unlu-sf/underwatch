@@ -1,4 +1,4 @@
-# Kernel Witness: pitch
+# Underwatch: pitch
 
 ## 90-second spoken pitch (about 220 words)
 
@@ -9,7 +9,7 @@
 > `cat .env` through Bash. Then its final report says no secrets were accessed. Nothing in the agent's own logs
 > catches that.
 >
-> Kernel Witness runs the agent in a disposable container and watches it from outside. Tetragon, an eBPF observer
+> Underwatch runs the agent in a disposable container and watches it from outside. Tetragon, an eBPF observer
 > in the kernel, records every process and every sensitive file open, and the agent can't see it or kill it.
 > We put what the agent *said* next to what the kernel *saw*.
 >

@@ -161,7 +161,7 @@ describe("Session menu + permission denied", () => {
     await user.click(await screen.findByRole("button", { name: "Account: Ada Lovelace" }));
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Log out" }));
-    expect(await screen.findByRole("heading", { name: "Log in to Kernel Witness" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Log in to Underwatch" })).toBeInTheDocument();
     expect(calls.some((c) => c.path === "/api/accounts/logout" && c.method === "POST")).toBe(true);
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull();
   });

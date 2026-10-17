@@ -7,7 +7,7 @@
  *      re-projects every run into Neo4j and deletes Neo4j runs that no longer exist in SQLite.
  *   4. Re-creates the disposable demo workspace (data/workspaces/demo-repo, synthetic secrets only).
  * Not touched: data/auth-token, data/evidence/blobs (content-addressed; orphans are harmless), Tetragon state,
- * Docker containers, .env.local, ~/.kernel-witness.
+ * Docker containers, .env.local, ~/.underwatch.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";

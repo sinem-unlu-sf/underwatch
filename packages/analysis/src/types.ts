@@ -33,7 +33,7 @@ export interface EventDetails {
   access_mode?: "read" | "write" | "read_write" | null;
   /** Kernel-resolved path (d_path) when the collector provides it. */
   resolved_path?: string | null;
-  /** Kernel Witness enforcement rule id when this record is (or is paired with) a KW enforcement action. */
+  /** Underwatch enforcement rule id when this record is (or is paired with) a KW enforcement action. */
   enforcement_rule_id?: string | null;
   /** Process start time (ISO). Disambiguates pid reuse. */
   process_start_time?: string | null;

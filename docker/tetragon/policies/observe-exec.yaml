@@ -1,4 +1,4 @@
-# Kernel Witness - observe-exec
+# Underwatch - observe-exec
 #
 # NOT a TracingPolicy. Process exec/exit observation comes from Tetragon's
 # built-in execve sensor, which is always on: every process_exec / process_exit

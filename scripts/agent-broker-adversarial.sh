@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kernel Witness - adversarial test of the LLM credential broker (docker/llm-broker).
+# Underwatch - adversarial test of the LLM credential broker (docker/llm-broker).
 #
 #   scripts/agent-broker-adversarial.sh
 #

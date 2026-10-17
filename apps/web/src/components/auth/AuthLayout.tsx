@@ -7,14 +7,14 @@ import { LogoMark } from "../shell/nav";
 /** Minimal centered page for /signup and /login (no app shell), matching the landing page's dark Linear-style look. */
 export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   useEffect(() => {
-    document.title = `${title} · Kernel Witness`;
+    document.title = `${title} · Underwatch`;
   }, [title]);
   return (
     <div className="flex min-h-dvh flex-col bg-bg px-4 text-text">
       <header className="mx-auto flex w-full max-w-5xl items-center py-5">
         <Link to="/" className="flex items-center gap-2 text-[14px] font-medium text-text no-underline">
           <LogoMark size={22} />
-          Kernel Witness
+          Underwatch
         </Link>
       </header>
       <main className="flex flex-1 items-start justify-center pb-16 pt-[8vh]">
@@ -78,7 +78,7 @@ export function AuthFormError({ children }: { children: ReactNode }) {
 /** Honest, specific wording for the API failure kinds; never claims success. */
 export function describeAccountError(err: unknown, action: "sign up" | "log in"): string {
   if (!(err instanceof ApiRequestError)) return err instanceof Error ? err.message : `Could not ${action}.`;
-  if (err.kind === "unreachable") return "The Kernel Witness API is not reachable. Start it with pnpm dev (or pnpm open) and try again.";
+  if (err.kind === "unreachable") return "The Underwatch API is not reachable. Start it with pnpm dev (or pnpm open) and try again.";
   if (err.kind === "contract") return `The server answered with an unexpected response (HTTP ${err.status ?? "?"}). Nothing was stored in this browser.`;
   if (err.status === 404 || err.code === "not_found" || err.code === "not_implemented")
     return "Accounts are not available on this server build yet. You can still use the local access token.";

@@ -1,14 +1,14 @@
-# Kernel Witness: UI Redesign PRD
+# Underwatch: UI Redesign PRD
 
 > The authoritative UI redesign spec from the user, 2026-10-17, recorded as received. It replaces the earlier draft in [`UI-REDESIGN-BRIEF.md`](./UI-REDESIGN-BRIEF.md). The finding-level features from Addendum C ([`PRD-addendum-judge-feedback.md`](./PRD-addendum-judge-feedback.md)) still apply and are restated at the end: Quick Read | Full Technical Details, a contextual chatbot, and the graph near the top of a finding.
 
 ## 1. Product Vision
 
-Redesign the existing Kernel Witness interface into a futuristic, clean, minimal, and intuitive developer tool that makes AI coding-agent behavior easier to understand, investigate, and secure.
+Redesign the existing Underwatch interface into a futuristic, clean, minimal, and intuitive developer tool that makes AI coding-agent behavior easier to understand, investigate, and secure.
 
 **Core message:** Don't just trust what your coding agent says it did.
 
-Kernel Witness independently observes coding-agent activity, compares reported actions with observed system events and permissions, investigates discrepancies, and turns verified incidents into tested safeguards.
+Underwatch independently observes coding-agent activity, compares reported actions with observed system events and permissions, investigates discrepancies, and turns verified incidents into tested safeguards.
 
 The interface should make a complex technical system feel clear and approachable without hiding the underlying complexity or compromising its rigor.
 
@@ -99,7 +99,7 @@ Use a collapsible left sidebar, approximately 232px when expanded and 64px when 
 
 The sidebar should contain:
 
-- Kernel Witness logo and product identity
+- Underwatch logo and product identity
 - Primary navigation
 - Access to relevant tools and workspaces already supported by the application
 - Settings and configuration access
@@ -162,7 +162,7 @@ Navigation should make it easy to understand where the user is, move between rel
 
 ### Overview
 
-Create a clear starting point that helps users understand the current state of Kernel Witness.
+Create a clear starting point that helps users understand the current state of Underwatch.
 
 Prioritize relevant activity, findings, system status, and available next actions using existing data.
 
@@ -228,7 +228,7 @@ Present existing safeguard and remediation workflows in a structured, understand
 
 ## 7. Tables, Technical Data, and Status Indicators
 
-Technical data is central to Kernel Witness, so tables and structured information must receive the same design attention as the main dashboard.
+Technical data is central to Underwatch, so tables and structured information must receive the same design attention as the main dashboard.
 
 ### Tables
 
@@ -383,7 +383,7 @@ The redesign is complete when:
 - No functional feature has been replaced with a mock implementation.
 - Existing workflows and tests have been checked, and remaining limitations are documented.
 
-**Final instruction:** Make Kernel Witness feel like a precise, modern developer tool: minimal in appearance, rigorous underneath, and easy to navigate without hiding the technical detail that makes it trustworthy.
+**Final instruction:** Make Underwatch feel like a precise, modern developer tool: minimal in appearance, rigorous underneath, and easy to navigate without hiding the technical detail that makes it trustworthy.
 
 ---
 

@@ -1,7 +1,7 @@
 /**
  * Key relationships for a finding (Addendum C section 5): the 3-6 most important relationship paths, in plain
  * language, computed from an ALREADY BUILT FindingGraphResponse (Neo4j query results, or the relational fallback) plus
- * the Kernel Witness records those nodes stand for (policy rule text, finding fields, run labels). Nothing here creates
+ * the Underwatch records those nodes stand for (policy rule text, finding fields, run labels). Nothing here creates
  * nodes, edges or statistics: every step names a node id the graph response (nodes or insights) returned, every hop
  * carries the edge basis the projection stored, and a path is only as strong as its weakest hop. Inferred links say so.
  * Deterministic; no AI involved.
@@ -122,7 +122,7 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
       basis_note:
         basis === "inferred"
           ? "Inferred: the finding is below high confidence, so this pairing is a lead to check, not proof of a discrepancy."
-          : "Derived by Kernel Witness analysis from a high-confidence finding. The agent report is a claim; the observed event is the independent record.",
+          : "Derived by Underwatch analysis from a high-confidence finding. The agent report is a claim; the observed event is the independent record.",
       steps: [step(rep.id, "AgentAction", null, null, null), step(obs.id, "ObservedEvent", null, "CONTRADICTS", e.basis)],
       links: [eventLink(rep.id, "Agent report"), eventLink(obs.id, "Observed event")],
     });
@@ -175,7 +175,7 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
       basis_note:
         basis === "inferred"
           ? "Inferred: at least one hop is heuristic (uncertain correlation or low-confidence process attribution), so treat the chain as a hypothesis, not proof."
-          : `Weakest hop is ${basis}. Process spawns come from the tracer; the tool-call link comes from Kernel Witness correlation.`,
+          : `Weakest hop is ${basis}. Process spawns come from the tracer; the tool-call link comes from Underwatch correlation.`,
       steps,
       links: [...(otc ? [eventLink(otc.event_id, "Tool call")] : []), eventLink(a.event_id, "Observed event")],
     });
@@ -288,7 +288,7 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
       kind: "recurrence",
       text: `This finding is recorded as a possible recurrence of ${prev}${byId.get(prev) ? ` ${q(byId.get(prev)!.title)}` : ""}.`,
       basis: weakestBasis([e?.basis ?? "derived"]),
-      basis_note: "Recorded by Kernel Witness recurrence detection: a potential regression to review, not a confirmed repeat.",
+      basis_note: "Recorded by Underwatch recurrence detection: a potential regression to review, not a confirmed repeat.",
       steps: [step(prev, "Finding", null, null, null), step(fid, "Finding", null, "RECURRED_AS", e?.basis ?? "derived")],
       links: [findingLink(prev, "Earlier finding")],
     });
@@ -357,7 +357,7 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
     source: g.source,
     detail: fromNeo4j
       ? `From Neo4j query results (finding neighborhood, process ancestry, cross-run resource matches)${g.truncated ? "; the graph was truncated, so some relationships may be missing" : ""}.`
-      : `From Kernel Witness records, Neo4j unavailable. ${g.detail}`,
+      : `From Underwatch records, Neo4j unavailable. ${g.detail}`,
     items,
     omitted: total - items.length,
     unavailable,

@@ -1,8 +1,8 @@
 /**
- * Ask Witness RUN and WORKSPACE scope retrieval. Deterministic SQL over Kernel Witness's OWN database only: never
+ * Ask Witness RUN and WORKSPACE scope retrieval. Deterministic SQL over Underwatch's OWN database only: never
  * repository files, the web, or any query text from the model. Every bundle is capped (SCOPED_BUNDLE_MAX_ITEMS) and
  * sealed by buildScopedBundle (same redaction/sanitization as the finding bundle). Run scope never includes another
- * run's records. Support labels stay honest: rows Kernel Witness derived (findings, runs, coverage, overview, digest,
+ * run's records. Support labels stay honest: rows Underwatch derived (findings, runs, coverage, overview, digest,
  * safeguards, verification) are basis "derived"; events keep their own reported/observed basis; evidence records inherit
  * the basis of the events that reference them (observed wins).
  */
@@ -530,7 +530,7 @@ export function forWorkspace(ctx: ServerContext, question: string): ScopedBundle
   const levels = [...new Set(recentRuns.map((r) => r.coverage_status))];
   return seal(
     ctx,
-    { kind: "workspace", id: null, label: "All Kernel Witness records" },
+    { kind: "workspace", id: null, label: "All Underwatch records" },
     items,
     { strategy: m.terms.length > 0 ? "workspace: keyword/field match" : "workspace: newest open findings (no matching terms)", matched_terms: m.terms, caps: { ...CAPS, total: SCOPED_BUNDLE_MAX_ITEMS } },
     levels,

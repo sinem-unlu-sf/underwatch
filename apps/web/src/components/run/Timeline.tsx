@@ -13,7 +13,7 @@ interface TimelineProps {
 
 /**
  * Two provenance lanes on a shared time axis: what the agent said it did (left) and what independent observers captured (right).
- * Derived records (Kernel Witness analysis) span both lanes and are visually neutral because they are not raw evidence.
+ * Derived records (Underwatch analysis) span both lanes and are visually neutral because they are not raw evidence.
  */
 export function Timeline({ events, correlations, findings, selectedId, onSelect }: TimelineProps) {
   const correlationsByEvent = useMemo(() => {

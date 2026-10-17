@@ -1,4 +1,4 @@
-# Kernel Witness default egress allowlist for the AGENT path (one anchored ERE per
+# Underwatch default egress allowlist for the AGENT path (one anchored ERE per
 # line, matched against the request host by tinyproxy; everything else is denied).
 #
 # EMPTY ON PURPOSE (2026-10-17, credential-broker remediation): the agent reaches the

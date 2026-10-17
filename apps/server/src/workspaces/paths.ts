@@ -68,6 +68,7 @@ export function validateWorkspaceRoot(input: string, rules: AuthorizeRules): str
     [path.join(home, ".ssh"), "~/.ssh"],
     [path.join(home, ".aws"), "~/.aws"],
     [path.join(home, ".gnupg"), "~/.gnupg"],
+    [path.join(home, ".underwatch"), "~/.underwatch"],
     [path.join(home, ".kernel-witness"), "~/.kernel-witness"],
     [path.join(home, "Library"), "~/Library"],
     ["/System", "/System"],
@@ -86,11 +87,11 @@ export function validateWorkspaceRoot(input: string, rules: AuthorizeRules): str
   }
 
   const evidence = realOrSelf(rules.evidenceDir);
-  if (isInside(real, evidence)) throw invalid("Refusing to authorize the Kernel Witness evidence store (data/evidence).");
+  if (isInside(real, evidence)) throw invalid("Refusing to authorize the Underwatch evidence store (data/evidence).");
   const dataDir = realOrSelf(rules.dataDir);
-  if (isInside(dataDir, real)) throw invalid("Refusing to authorize a directory that contains the Kernel Witness data directory.");
+  if (isInside(dataDir, real)) throw invalid("Refusing to authorize a directory that contains the Underwatch data directory.");
   if (isInside(real, dataDir) && !isInside(real, realOrSelf(rules.workspacesDir))) {
-    throw invalid("Refusing to authorize Kernel Witness's own data directory.");
+    throw invalid("Refusing to authorize Underwatch's own data directory.");
   }
 
   const hasGit = existsSync(path.join(real, ".git"));
@@ -137,7 +138,7 @@ export function resolveClaudeMdPath(root: string, relPath: string): string {
   const target = path.join(realDir, "CLAUDE.md");
   try {
     const st = lstatSync(target);
-    if (st.isSymbolicLink()) throw invalid("CLAUDE.md is a symlink; Kernel Witness refuses to follow it.");
+    if (st.isSymbolicLink()) throw invalid("CLAUDE.md is a symlink; Underwatch refuses to follow it.");
     if (!st.isFile()) throw invalid("CLAUDE.md is not a regular file.");
   } catch (err) {
     if (err instanceof ApiHttpError) throw err;
@@ -154,7 +155,7 @@ export function readConfined(abs: string, maxBytes = MAX_CLAUDE_MD_BYTES): Buffe
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return null;
-    if (code === "ELOOP") throw invalid("CLAUDE.md is a symlink; Kernel Witness refuses to follow it.");
+    if (code === "ELOOP") throw invalid("CLAUDE.md is a symlink; Underwatch refuses to follow it.");
     throw err;
   }
   try {

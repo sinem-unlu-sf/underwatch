@@ -139,7 +139,7 @@ export function verificationPlanFor(f: FindingFacts): VerificationPlan {
 function instructionFor(f: FindingFacts): string {
   const res = f.resources[0];
   const action = f.rule?.action ?? null;
-  const cite = `(Kernel Witness finding ${f.finding.id}: "${f.finding.title}")`;
+  const cite = `(Underwatch finding ${f.finding.id}: "${f.finding.title}")`;
   const reportLine =
     "If an attempt is denied or blocked, say so plainly in your final summary; never report an action as not attempted or a secret as not accessed unless that is certain.";
   switch (f.finding.category) {
@@ -202,7 +202,7 @@ export function buildTemplateProposals(f: FindingFacts): { proposals: TemplatePr
     title: `CLAUDE.md instruction for: ${f.finding.title}`.slice(0, 200),
     content: instructionFor(f),
     target: { kind: "workspace_file", rel_path: DEFAULT_CLAUDE_MD_PATH },
-    application_mechanism: "Marked Kernel Witness block in CLAUDE.md of an authorized workspace (or a copyable patch when none is connected).",
+    application_mechanism: "Marked Underwatch block in CLAUDE.md of an authorized workspace (or a copyable patch when none is connected).",
     rationale: `Finding ${f.finding.id} (${f.finding.category}, ${f.finding.severity}): ${f.finding.title}.${channelSentence(f)} The instruction names the exact resource and the routes used, so the agent is less likely to retry through another tool.`,
     intended_effect: "Guidance only: makes the agent less likely to attempt the action and more likely to report denials accurately. It does not block anything.",
     legitimate_workflow_impact: res.length ? `The agent will ask before touching ${list(res)}.` : "Minimal: affects only the reported action.",
@@ -222,10 +222,10 @@ export function buildTemplateProposals(f: FindingFacts): { proposals: TemplatePr
     const bashRoute = f.tools.includes("Bash") || f.processes.length > 0;
     proposals.push({
       type: "permission_rule",
-      title: `Deny ${tool} on ${concrete.join(", ")} in Kernel Witness verification runs`.slice(0, 200),
+      title: `Deny ${tool} on ${concrete.join(", ")} in Underwatch verification runs`.slice(0, 200),
       content: JSON.stringify({ permissions: { deny } }, null, 2),
       target: { kind: "supervised_run_policy" },
-      application_mechanism: "permissions.deny in Kernel Witness's read-only managed policy for this safeguard's verification runs (not your repository or your own Claude Code settings).",
+      application_mechanism: "permissions.deny in Underwatch's read-only managed policy for this safeguard's verification runs (not your repository or your own Claude Code settings).",
       rationale:
         `${ruleLabel(f)} was violated in finding ${f.finding.id}.${channelSentence(f)}` +
         (action === "file_read" && bashRoute
@@ -249,7 +249,7 @@ export function buildTemplateProposals(f: FindingFacts): { proposals: TemplatePr
       type: "hook_policy",
       title: `PreToolUse deny hook for ${concrete.join(", ")} (unavailable in this build)`.slice(0, 200),
       content: [
-        "PreToolUse command hook (text only - Kernel Witness cannot apply or test hooks in this build):",
+        "PreToolUse command hook (text only - Underwatch cannot apply or test hooks in this build):",
         `matcher: "Read|Bash|Edit|Write"`,
         `deny when tool_input.file_path resolves to ${concrete.map((r) => `./${r}`).join(" or ")}, or tool_input.command references ${concrete.join(" or ")};`,
         `output: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "${ruleLabel(f).replace(/"/g, "'")}"}}`,
@@ -299,7 +299,7 @@ export function buildTemplateProposals(f: FindingFacts): { proposals: TemplatePr
     application_mechanism: MECHANISMS.regression_test.apply_description,
     rationale: `Re-runs the restricted action from finding ${f.finding.id} and a legitimate task in a disposable container, so a later change that lets it succeed again is detected.`,
     intended_effect: "Detection only: records what a controlled run actually does. Prevents nothing by itself.",
-    legitimate_workflow_impact: "None: runs only in Kernel Witness's disposable container.",
+    legitimate_workflow_impact: "None: runs only in Underwatch's disposable container.",
     limitations: [...MECHANISMS.regression_test.cannot],
     verification_plan: plan,
     evidence_ids: ids,

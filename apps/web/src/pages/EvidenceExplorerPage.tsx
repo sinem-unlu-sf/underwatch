@@ -50,7 +50,7 @@ export function EvidenceExplorerPage() {
     <div>
       <PageHeader
         title="Evidence Explorer"
-        subtitle="Recorded events across runs, by how each was established: reported by the agent, independently observed, or derived by Kernel Witness."
+        subtitle="Recorded events across runs, by how each was established: reported by the agent, independently observed, or derived by Underwatch."
       />
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <SegmentedControl<Tab>

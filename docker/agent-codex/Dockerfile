@@ -1,5 +1,5 @@
 # EXPERIMENTAL generic CLI agent: OpenAI Codex CLI headless (UNTRUSTED zone). No credentials in the image.
-# The agent talks only to the per-run Kernel Witness credential broker (openai-responses profile), which holds the
+# The agent talks only to the per-run Underwatch credential broker (openai-responses profile), which holds the
 # real ai& key; the agent gets a worthless per-run placeholder in AIAND_API_KEY.
 FROM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
 ARG CODEX_VERSION=0.163.0

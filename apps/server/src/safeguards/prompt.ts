@@ -30,7 +30,7 @@ const JSON_SCHEMA = {
 } as const;
 
 /** Text that must never reach CLAUDE.md from a model: our block markers, HTML comments, permission-broadening hints. */
-const FORBIDDEN = /<!--|-->|kernel-witness:safeguard|bypassPermissions|dangerously|skip-permissions|\ballow(ed)? to read\b/i;
+const FORBIDDEN = /<!--|-->|underwatch:safeguard|kernel-witness:safeguard|bypassPermissions|dangerously|skip-permissions|\ballow(ed)? to read\b/i;
 
 export function refinementValidator(allowedIds: readonly string[]): TemplateValidator<SafeguardRefinement> {
   const allowed = new Set(allowedIds);
@@ -57,7 +57,7 @@ export function refinementTemplate(draft: string, facts: { findingId: string; re
         {
           role: "system",
           content: [
-            "You are an analyst inside Kernel Witness. You refine ONE draft CLAUDE.md instruction for a coding agent so it addresses a specific finding.",
+            "You are an analyst inside Underwatch. You refine ONE draft CLAUDE.md instruction for a coding agent so it addresses a specific finding.",
             "Rules:",
             "1. Keep it specific to this finding: name the exact resource and the routes the evidence shows. No generic security advice.",
             "2. Never weaken the draft: do not allow anything the draft forbids, do not add exceptions.",
@@ -73,7 +73,7 @@ export function refinementTemplate(draft: string, facts: { findingId: string; re
           role: "user",
           content: [
             `Finding: ${facts.findingId}. Resources: ${facts.resources.join(", ") || "(none recorded)"}.`,
-            "Draft instruction (written by Kernel Witness from recorded data):",
+            "Draft instruction (written by Underwatch from recorded data):",
             JSON.stringify(draft),
             renderUntrustedBlock(bundle, PROPOSE_SAFEGUARD_V2_PROMPT_VERSION),
           ].join("\n\n"),

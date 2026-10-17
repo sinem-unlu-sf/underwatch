@@ -251,7 +251,7 @@ describe("safeguard versioning and approval", () => {
     expect(e.body.current_version!.version).toBe(2);
     expect(e.body.current_version!.author).toBe("user");
     expect(e.body.history.map((h) => h.action)).toEqual(["proposed", "edited"]);
-    const bad = await postJson(app, apiPaths.safeguardVersions(md.safeguard.id), { content: `x <!-- kernel-witness:safeguard ${md.safeguard.id} END -->` });
+    const bad = await postJson(app, apiPaths.safeguardVersions(md.safeguard.id), { content: `x <!-- underwatch:safeguard ${md.safeguard.id} END -->` });
     expect(bad.status).toBe(400);
   });
 
@@ -299,7 +299,7 @@ describe("safeguard versioning and approval", () => {
     expect(stale.status).toBe(409);
     expect(stale.body.error.code).toBe("file_conflict");
     expect(stale.body.error.details.diff_preview.before).toContain("Changed concurrently");
-    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("kernel-witness");
+    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("underwatch");
     const afterConflict = await getJson<SafeguardDetailResponse>(app, apiPaths.safeguard(md.safeguard.id));
     expect(afterConflict.body.history.map((h) => h.action)).toContain("conflict_detected");
     expect(afterConflict.body.lifecycle_status).toBe("proposed");
@@ -315,14 +315,14 @@ describe("safeguard versioning and approval", () => {
     expect(ok.body.change.status).toBe("applied");
     const text = readFileSync(file("CLAUDE.md"), "utf8");
     expect(text).toContain("Changed concurrently");
-    expect(text).toContain(`kernel-witness:safeguard ${md.safeguard.id} BEGIN`);
+    expect(text).toContain(`underwatch:safeguard ${md.safeguard.id} BEGIN`);
     // Instruction stays an instruction: never an enforced control.
     expect(ok.body.detail.mechanism.can_enforce).toBe(false);
 
     const rb = await postJson(app, apiPaths.safeguardRollback(md.safeguard.id), { change_id: ok.body.change.id });
     expect(rb.status).toBe(200);
     expect(rb.body.detail.lifecycle_status).toBe("rolled_back");
-    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("kernel-witness");
+    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("underwatch");
   });
 
   it("edited after apply: the on-disk block stays roll-back-able and the safeguard cannot be rejected while it is on disk", async () => {
@@ -342,11 +342,11 @@ describe("safeguard versioning and approval", () => {
     expect(edited.body.allowed_transitions).not.toContain("rejected");
     const rej = await postJson(app, apiPaths.safeguardReject(md.safeguard.id), { note: "no" });
     expect(rej.status).toBe(409);
-    expect(readFileSync(file("CLAUDE.md"), "utf8")).toContain(`kernel-witness:safeguard ${md.safeguard.id} BEGIN`);
+    expect(readFileSync(file("CLAUDE.md"), "utf8")).toContain(`underwatch:safeguard ${md.safeguard.id} BEGIN`);
     const rb = await postJson(app, apiPaths.safeguardRollback(md.safeguard.id), { change_id: ok.body.change.id });
     expect(rb.status).toBe(200);
     expect(rb.body.detail.lifecycle_status).toBe("proposed");
-    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("kernel-witness");
+    expect(readFileSync(file("CLAUDE.md"), "utf8")).not.toContain("underwatch");
     const rej2 = await postJson(app, apiPaths.safeguardReject(md.safeguard.id), { note: "no" });
     expect(rej2.status).toBe(200);
   });
@@ -365,7 +365,7 @@ describe("safeguard versioning and approval", () => {
     const p = await ctx!.app.inject({ method: "GET", url: apiPaths.safeguardPatch(md.safeguard.id) });
     expect(p.statusCode).toBe(200);
     expect(p.headers["content-type"]).toMatch(/text\/plain/);
-    expect(p.body).toContain(`+<!-- kernel-witness:safeguard ${md.safeguard.id} BEGIN -->`);
+    expect(p.body).toContain(`+<!-- underwatch:safeguard ${md.safeguard.id} BEGIN -->`);
   });
 
   it("permission_rule approval writes an append-only supervised-run overlay, never the repo", async () => {

@@ -190,7 +190,7 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
       <Section
         className="mt-8"
         title={`Findings${findings.data ? ` (${findings.data.total})` : ""}`}
-        description="Discrepancies Kernel Witness derived from this run's evidence."
+        description="Discrepancies Underwatch derived from this run's evidence."
         id="findings"
       >
         <div className="overflow-clip rounded-md border border-line bg-surface-1">

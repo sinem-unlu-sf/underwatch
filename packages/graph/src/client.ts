@@ -152,7 +152,7 @@ export class GraphClient {
           connectionAcquisitionTimeout: (opts.connectionTimeoutMs ?? 3_000) + 2_000,
           maxConnectionPoolSize: 20,
           maxTransactionRetryTime: opts.maxRetryTimeMs ?? 3_000,
-          userAgent: "kernel-witness-graph/0.1",
+          userAgent: "underwatch-graph/0.1",
         });
       } catch (err) {
         this.notConfigured = `Neo4j driver could not be created: ${classifyError(err, this.secret).message}`;

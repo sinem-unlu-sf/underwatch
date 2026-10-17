@@ -138,12 +138,12 @@ describe("policy classification", () => {
     for (const c of ["allowed", "violation_blocked", "violation_completed", "undetermined"]) expect(seen).toContain(c);
   });
 
-  it("EACCES without a KW enforcement record is blocked by the environment, never 'blocked by Kernel Witness'", () => {
+  it("EACCES without a KW enforcement record is blocked by the environment, never 'blocked by Underwatch'", () => {
     const r = analyzeRun(scenario("s04").input);
     const d = r.decisions.find((x) => x.resource === "/workspace/.env")!;
     expect(d.classification).toBe("violation_blocked");
     expect(d.blocked_by).toBe("environment");
-    expect(r.findings[0]!.title).not.toMatch(/blocked by Kernel Witness/);
+    expect(r.findings[0]!.title).not.toMatch(/blocked by Underwatch/);
     const r13 = analyzeRun(scenario("s13").input);
     expect(r13.decisions.find((x) => x.resource === "/workspace/package-lock.json")!.blocked_by).toBe("kw_enforcement");
   });

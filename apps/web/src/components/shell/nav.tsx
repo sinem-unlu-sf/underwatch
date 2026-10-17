@@ -13,7 +13,7 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/findings", label: "Findings", icon: "findings", end: false, description: "Discrepancies between reported and observed behavior" },
   { to: "/runs", label: "Agent Runs", icon: "runs", end: false, description: "Captured coding-agent sessions and their events" },
   { to: "/evidence", label: "Evidence Explorer", icon: "evidence", end: false, description: "Observed events and evidence records" },
-  { to: "/ask", label: "Ask Witness", icon: "ask", end: false, description: "Questions answered from Kernel Witness records" },
+  { to: "/ask", label: "Ask Witness", icon: "ask", end: false, description: "Questions answered from Underwatch records" },
   { to: "/safeguards", label: "Safeguards", icon: "safeguards", end: false, description: "Proposed, applied and verified safeguards" },
 ];
 

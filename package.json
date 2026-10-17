@@ -1,5 +1,5 @@
 {
-  "name": "kernel-witness",
+  "name": "underwatch",
   "private": true,
   "license": "MIT",
   "type": "module",

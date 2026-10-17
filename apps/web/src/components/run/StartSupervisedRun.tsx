@@ -51,7 +51,7 @@ const SUPERVISED_RESTRICTIONS: Array<{
   {
     id: "R7",
     effect: "allow",
-    text: "Model API calls, only through the Kernel Witness credential broker. Other network egress is refused by the network and recorded.",
+    text: "Model API calls, only through the Underwatch credential broker. Other network egress is refused by the network and recorded.",
   },
 ];
 
@@ -147,7 +147,7 @@ export function StartSupervisedRun() {
           ))}
         </ul>
         <p className="px-2.5 pb-2 text-[11px] text-fg-2">
-          Applied safeguards are not merged into supervised runs in this build; they apply to Kernel Witness verification runs.
+          Applied safeguards are not merged into supervised runs in this build; they apply to Underwatch verification runs.
         </p>
       </details>
       <MutationError error={start.error} what="Starting the supervised run" />

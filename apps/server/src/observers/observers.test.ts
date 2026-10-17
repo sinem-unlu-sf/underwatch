@@ -140,7 +140,7 @@ describe("applyKernelEvidence (independent source for the restricted case)", () 
     expect(k.opened).toHaveLength(0);
     const ev = applyKernelEvidence(hostEval("not_exercised"), k, (id) => `event:${id}`);
     expect(ev.cases[0]!.result).toBe("pass");
-    expect(ev.cases[0]!.observed).toMatch(/denied in-kernel with EPERM by Kernel Witness policy kw-enf-test-run/);
+    expect(ev.cases[0]!.observed).toMatch(/denied in-kernel with EPERM by Underwatch policy kw-enf-test-run/);
     expect(ev.restricted_attempted).toBe(true);
 
     const foreign = normalizeSlice(agentRecords({ blocked: true, policy: "someone-else" }), { runId: RUN, enforcementPolicies: {} }).events;
@@ -274,6 +274,6 @@ describe("ingestKernelObservation", () => {
     const input2 = { ...input, obsRunId: "run_ingest_pv", policyVersion: pv };
     ingestKernelObservation(db, input2);
     expect((db.prepare("SELECT policy_version FROM runs WHERE id = ?").get("run_ingest_pv") as { policy_version: string }).policy_version).toBe(pv.id);
-    expect(db.prepare("SELECT name FROM policy_versions WHERE id = ?").get(pv.id)).toMatchObject({ name: "Kernel Witness verification run policy" });
+    expect(db.prepare("SELECT name FROM policy_versions WHERE id = ?").get(pv.id)).toMatchObject({ name: "Underwatch verification run policy" });
   });
 });

@@ -49,7 +49,7 @@ export interface SyntheticSecretRegistry {
 }
 
 /**
- * Synthetic secrets used by Kernel Witness demos, fixtures and spikes. The research spikes plant
+ * Synthetic secrets used by Underwatch demos, fixtures and spikes. The research spikes plant
  * `KW_SYNTHETIC_SECRET=kw-test-0000` (and `kw-test-0001` for a modified file), so both the name and the value shape are registered.
  */
 export const DEFAULT_SYNTHETIC_REGISTRY: SyntheticSecretRegistry = {

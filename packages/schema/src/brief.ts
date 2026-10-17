@@ -105,7 +105,7 @@ export const FindingBrief = z.object({
   evidence_summary: z.object({
     agent_reported: z.number().int().nonnegative(),
     independently_observed: z.number().int().nonnegative(),
-    /** Kernel Witness analysis records (correlation / policy evaluation). Not raw evidence. */
+    /** Underwatch analysis records (correlation / policy evaluation). Not raw evidence. */
     derived: z.number().int().nonnegative(),
     evidence_records: z.number().int().nonnegative(),
     key_event_ids: z.array(EventId),
@@ -143,7 +143,7 @@ export const SHORT_READ_MAX_WORDS = 150;
 export const ShortReadNumber = z.object({
   /** Short quantitative fact, e.g. "1 successful open of .env by node (kernel-observed)". */
   text: z.string().min(1),
-  /** Where the count comes from: agent's own account, an independent collector, or Kernel Witness analysis. */
+  /** Where the count comes from: agent's own account, an independent collector, or Underwatch analysis. */
   basis: z.enum(["reported", "observed", "derived"]),
   /** Event / evidence / finding / verification-run ids the count was computed from (may be empty for a zero count). */
   evidence_ids: z.array(z.string()),

@@ -1,6 +1,6 @@
 /**
  * Live supervised runs (POST /api/runs). One headless Claude Code run in a disposable copy of an authorized workspace,
- * inside the kw-agent container under the Kernel Witness supervised policy (managed settings, read-only). The host
+ * inside the kw-agent container under the Underwatch supervised policy (managed settings, read-only). The host
  * captures stream-json, the hook spool, the egress-proxy and credential-broker logs, a pre/post git snapshot and (when
  * kw-tetragon is healthy) the Tetragon kernel record of the agent container; agent-REPORTED events come from the
  * Claude Code adapter parsers, OBSERVED events only from host-side / out-of-container sources.

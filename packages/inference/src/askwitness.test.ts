@@ -43,7 +43,7 @@ describe("askWitness", () => {
     const r = await new NullProvider().askWitness("q?", bundle, []);
     expect(r.status).toBe("unavailable");
     if (r.status === "unavailable") expect(r.reason).toBe("not_configured");
-    expect(r.meta.prompt_version).toBe("kw.ask-witness@3");
+    expect(r.meta.prompt_version).toBe("kw.ask-witness@4");
   });
 
   it("validates output, sends a strict schema, and caches per question (not per bundle)", async () => {
@@ -78,7 +78,7 @@ describe("askWitness", () => {
 
     it("defaults to concise / standard and bumps the prompt version", () => {
       const tpl = askWitnessTemplate("Why is this a problem?", []);
-      expect(tpl.prompt_version).toBe("kw.ask-witness@3");
+      expect(tpl.prompt_version).toBe("kw.ask-witness@4");
       const m = tpl.build(bundle);
       expect(sys(m)).toContain("Answer depth: CONCISE");
       expect(sys(m)).toContain("at most 3 short sentences");

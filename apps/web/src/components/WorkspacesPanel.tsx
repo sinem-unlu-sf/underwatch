@@ -33,7 +33,7 @@ export function WorkspacesPanel() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="max-w-[80ch] text-[12px] text-fg-1">
-            Kernel Witness's backend reads and writes files only inside workspaces you authorize here, and only <Mono>CLAUDE.md</Mono> files, after you approve a
+            Underwatch's backend reads and writes files only inside workspaces you authorize here, and only <Mono>CLAUDE.md</Mono> files, after you approve a
             visible diff. The demo workspace is a disposable copy of a template under <Mono>data/workspaces/</Mono> containing synthetic secrets only.
           </p>
           <button
@@ -154,7 +154,7 @@ export function WorkspacesPanel() {
           {confirming ? (
             <div role="dialog" aria-label="Confirm workspace authorization" className="space-y-1.5 rounded-md border border-focus/60 bg-surface-2 p-3 shadow-[var(--shadow-raised)] text-[12px]">
               <div className="text-fg-1">
-                Allow the Kernel Witness backend to read and edit <Mono>CLAUDE.md</Mono> files under <Mono className="text-fg-0">{path.trim()}</Mono>? Each edit
+                Allow the Underwatch backend to read and edit <Mono>CLAUDE.md</Mono> files under <Mono className="text-fg-0">{path.trim()}</Mono>? Each edit
                 still requires you to approve a visible diff, and conflicting changes are never overwritten. No other files are written.
               </div>
               <div className="flex gap-1.5">
@@ -213,7 +213,7 @@ export function CredentialsPanel({ aiStatus }: { aiStatus: IntegrationStatus | n
         <dd className="flex flex-wrap items-center gap-2">
           {yesNo(tokenCheck ? tokenCheck.ok : null)}
           <span className="text-fg-2">
-            <Mono>~/.kernel-witness/claude-oauth-token</Mono>, used only by the verification harness.{" "}
+            <Mono>~/.underwatch/claude-oauth-token</Mono>, used only by the verification harness.{" "}
             {harness.isError ? (harnessNi ? "Harness status not reported by this server build." : "Harness status unavailable.") : null}
           </span>
         </dd>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Kernel Witness hook forwarder (zero dependencies, Node >= 18).
+// Underwatch hook forwarder (zero dependencies, Node >= 18).
 //
 // EVIDENCE CLASS: AGENT-SIDE / REPORTED. This script runs as a Claude Code command hook INSIDE the
 // supervised agent's container, as the agent's user. Everything it writes is Claude Code's own account

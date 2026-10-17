@@ -88,7 +88,7 @@ export function coverageFragment(input: {
       "process exec/exit with lineage (exec_id, parent_exec_id, pid, ppid, binary, args, cwd, uid)",
       ...(filesOn ? ["file access attempts with resolved container paths (open, read()/write() permission checks)"] : []),
       ...(netOn ? ["network connect attempts (tcp_connect daddr:dport)"] : []),
-      ...(input.enforcementPolicies.length ? ["file opens, and renames/hard links of protected names, denied by Kernel Witness enforcement policies (labeled blocked)"] : []),
+      ...(input.enforcementPolicies.length ? ["file opens, and renames/hard links of protected names, denied by Underwatch enforcement policies (labeled blocked)"] : []),
     ],
     not_established: [
       "content actually read from a file",

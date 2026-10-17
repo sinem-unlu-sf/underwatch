@@ -1,4 +1,4 @@
-# Kernel Witness: architecture plan (for review)
+# Underwatch: architecture plan (for review)
 
 **Snapshot:** 2026-10-17, 10:55 JST; **revision 2 at 11:15 JST** applies the plan critique (2 blockers, 7 major, 6 minor issues; see "Revision 2" below). **Hard constraint:** the hackathon submission deadline is **16:00 JST today** (VERIFIED: fact-check verdict `ai-and-02` on https://luma.com/b2s69r8p; judging at the table, top-5 live demo at 16:30). That leaves about 5 hours. Everything below is sized for that window. Anything the design drafts specify beyond it is listed as *designed, not built*, and the product must never claim it.
 
@@ -39,7 +39,7 @@ This document answers PRD §14 items 1-7 and Addendum A §11 Phase 1 (`docs/PRD-
 
 ## 1. Status and how to review
 
-**Decided (settled by the user; not re-opened here):** the supervised agent runs headless (`claude -p`) in a disposable Docker container on this Mac; monitoring and authoritative evidence live outside that container, on the host; Neo4j runs locally in Docker; one TypeScript pnpm monorepo; agent auth is a `claude setup-token` OAuth token read from `~/.kernel-witness/claude-oauth-token` and passed only into the agent container. **Built:** the Phase-1 foundation in `$REPO` (shared Zod schema, Fastify + `node:sqlite` API on 127.0.0.1:4600, Vite/React UI on 4601 with all five nav pages, 5 labelled fixture runs; 12 + 22 + 13 tests pass per the build journal). **Merged into `$REPO` by the Addendum-A workflow (10:59-11:10):** `@kw/inference`, `@kw/redaction`, the agent image `kw-agent:2.1.302`, the egress proxy, `compose.agent.yml` and `agent-smoke.sh`; the Addendum-A contract and migration 002; server module SCAFFOLDS (auth, workspaces, investigations, safeguards, verification, graph route; 501 until implemented). **In progress in `$REPO`:** `packages/observer-tetragon` (lifecycle, policies, capture, parser, loss metrics) and `docker/tetragon/policies/`. **Still in staging (`$KN`):** `@kw/analysis`, `@kw/graph`, `@kw/adapter-claude-code`, `compose.dev.yml`. **Empirically proven on this Mac:**
+**Decided (settled by the user; not re-opened here):** the supervised agent runs headless (`claude -p`) in a disposable Docker container on this Mac; monitoring and authoritative evidence live outside that container, on the host; Neo4j runs locally in Docker; one TypeScript pnpm monorepo; agent auth is a `claude setup-token` OAuth token read from `~/.underwatch/claude-oauth-token` and passed only into the agent container. **Built:** the Phase-1 foundation in `$REPO` (shared Zod schema, Fastify + `node:sqlite` API on 127.0.0.1:4600, Vite/React UI on 4601 with all five nav pages, 5 labelled fixture runs; 12 + 22 + 13 tests pass per the build journal). **Merged into `$REPO` by the Addendum-A workflow (10:59-11:10):** `@kw/inference`, `@kw/redaction`, the agent image `kw-agent:2.1.302`, the egress proxy, `compose.agent.yml` and `agent-smoke.sh`; the Addendum-A contract and migration 002; server module SCAFFOLDS (auth, workspaces, investigations, safeguards, verification, graph route; 501 until implemented). **In progress in `$REPO`:** `packages/observer-tetragon` (lifecycle, policies, capture, parser, loss metrics) and `docker/tetragon/policies/`. **Still in staging (`$KN`):** `@kw/analysis`, `@kw/graph`, `@kw/adapter-claude-code`, `compose.dev.yml`. **Empirically proven on this Mac:**
 - Tetragon v1.7.0 observes process trees, policy-selected file opens and connects inside the Docker Desktop VM. It can deny a file open for one container. The agent can neither see nor kill it.
 - From the agent, direct connections to **external** targets fail (api.anthropic.com direct, 1.1.1.1:443, external DNS; smoke P10-P12), and the allowlisting proxy decides every proxied request. **Not tested:** reachability of listeners inside the Docker Desktop VM (bridge gateway, `host.docker.internal`, published ports 7697/7484/29112, the KW API on 4600, the daemon proxy `http.docker.internal:3128`). Docker documents that an `internal` network can still reach the gateway (VERIFIED, V:`observation-landscape-31`). So "the agent has no other route out" is **UNVERIFIED** until the extended P11 passes (§3.8).
 - An authenticated Claude Code run inside the container completed at 10:39, with managed hooks firing on tool calls.
@@ -107,7 +107,7 @@ This document answers PRD §14 items 1-7 and Addendum A §11 Phase 1 (`docs/PRD-
 | X18 | **Explanation vs investigation.** All drafts: one-shot `explainFinding` with schema `kw.explanation.v1`. Addendum §3: multi-turn Ask Witness with fields `summary, verified_facts, hypotheses, unknowns, evidence_references, recommended_next_steps, recommended_safeguards`. | **Replace `explainFinding` with `investigate(question, bundle, history)` using the addendum's schema** (`kw.investigation.v1`). The "explain" button becomes the first suggested question. Revision 2: no AI claim is ever labelled "verified". Each claim gets the **built `EvidenceSupport` label** (`observed_evidence` / `reported_evidence_only` / `derived_only` / `unsupported`, `askwitness.ts`), computed by the application whatever field the model used (§4.2.6). | Addendum governs; the built contract already avoids the word. |
 | X19 | **Auth.** Revision 1 (D24): per-boot `X-KW-Token` embedded in the served HTML. Built contract: Origin allowlist + `x-kw-client` header on mutations, optional `KW_API_TOKEN` Bearer mode, default `local_loopback` (guard is a stub today). | **Adopt the built contract.** Both designs are CSRF hardening only: any process that can reach 4600/4601 can read an HTML-embedded token or forge headers. **Self-approval is prevented only by network unreachability** (extended P11, self-tested every run; §5.11). | The token never was a boundary against a reachable agent. |
 | X20 | **Workspace kinds.** Revision 1 (D26): scenario templates only, registered by CLI. Built: `kind ∈ {demo, user}`; `POST /api/workspaces {confirm:true}` authorizes any existing directory. | **Decision 9.** Recommended default: keep `demo` as the only kind enabled for the hackathon (the route returns 403 for `user` unless `KW_ALLOW_USER_WORKSPACES=1`); keep the code path. | Addendum §4.5 allows user workspaces with explicit authorization; demo safety favours disposable copies. |
-| X21 | **Blob store location.** Revision 1: `~/.kernel-witness/blobs` (0700, outside the repo tree). Built: `$REPO/data/evidence/blobs` (`FsBlobStore`, files 0600, gitignored). | **Decision 10.** Recommended default: keep the built path for Ask Witness and safeguard artifacts; put supervised-run raw evidence and manifests under `~/.kernel-witness/runs/<run>/` via the same `BlobStore` interface with a second root. | `data/` sits under `/Users`, which Docker Desktop file sharing may expose (R1); the run evidence is the authoritative part. |
+| X21 | **Blob store location.** Revision 1: `~/.underwatch/blobs` (0700, outside the repo tree). Built: `$REPO/data/evidence/blobs` (`FsBlobStore`, files 0600, gitignored). | **Decision 10.** Recommended default: keep the built path for Ask Witness and safeguard artifacts; put supervised-run raw evidence and manifests under `~/.underwatch/runs/<run>/` via the same `BlobStore` interface with a second root. | `data/` sits under `/Users`, which Docker Desktop file sharing may expose (R1); the run evidence is the authoritative part. |
 | X22 | **Verification vocabulary.** Revision 1 mapped UI labels onto the v1 enum. Built: `verification_state ∈ {not_tested, running, passed, failed, inconclusive}`, with `legacyVerificationFields` writing the v1 `result` alongside. | **Adopt the built vocabulary.** "Passed" is displayed as "Passed (tested scenario)" and gated by the ordered verdict of §5.8. | Built, and it matches Addendum §5.3. |
 | X23 | **Graph vocabulary.** Built `graph.ts`: `GraphBasis` = {reported, observed, derived, ai, user}, label `AgentAction`, no `Process`. PRD §6.7 requires observed / derived / inferred edges; the staging projector has `Process`. | **Migration-003-style schema delta:** add `inferred` to `GraphBasis` and `Process` (plus `PolicyVersion`) to `GraphNodeLabel`. Keep `AgentAction` as the API label (maps to the PRD's `AgentEvent` in Neo4j). | Without `inferred`, the tool-call → process hop cannot be shown honestly. |
 
@@ -150,8 +150,8 @@ Added cost: about 4 agent-hours (Ask Witness backend 1.5, panel 1.5, `CLAUDE.md`
 | Claude Code | 2.1.302 on the host and in `kw-agent:2.1.302` | EMPIRICAL (smoke `claude_version`) |
 | Running containers | `kw-neo4j`: `neo4j:community@sha256:6f3f17e7…` = **2026.09.0** (`neo4j-kernel-2026.09.0.jar`), healthy, created 10:49 from `$KN/docker/compose.dev.yml`, `127.0.0.1:7697->7687`, `127.0.0.1:7484->7474`. `kw-tetragon`: `quay.io/cilium/tetragon:v1.7.0`, privileged, `--pid=host`, `127.0.0.1:29112->2112`, since 11:05 | EMPIRICAL (`docker ps`, `docker inspect`, `docker exec ls lib`, 11:12). Revision 1's "5.26.32" was wrong |
 | Images present | `kw-agent:2.1.302`, `kw-egress-proxy:1`, `quay.io/cilium/tetragon:v1.7.0`, `neo4j:community` (= 2026.09.0), `neo4j:5-community`, `node:24/22-bookworm`, spike images `kw-spike-proxy:1`, `kw-spike-tools:1` | EMPIRICAL |
-| Secrets on disk (contents never read) | `~/.kernel-witness/claude-oauth-token` (0600; works per the 10:39 run); `$REPO/.env.local` (0600; ai& key, not exercised); `$KN/.env.neo4j*` (Neo4j password; must move to `~/.kernel-witness/`) | EMPIRICAL (`ls`) |
-| Version control | `$REPO` **is a git repository since 11:00**: one commit `38db20a` "Snapshot: Kernel Witness foundation (work in progress)"; the addendum work is uncommitted; `.gitignore` covers `data/*`, `.env*` | EMPIRICAL (`git log`, `git status` 11:11); push and licence are decision 2 |
+| Secrets on disk (contents never read) | `~/.underwatch/claude-oauth-token` (0600; works per the 10:39 run); `$REPO/.env.local` (0600; ai& key, not exercised); `$KN/.env.neo4j*` (Neo4j password; must move to `~/.underwatch/`) | EMPIRICAL (`ls`) |
+| Version control | `$REPO` **is a git repository since 11:00**: one commit `38db20a` "Snapshot: Underwatch foundation (work in progress)"; the addendum work is uncommitted; `.gitignore` covers `data/*`, `.env*` | EMPIRICAL (`git log`, `git status` 11:11); push and licence are decision 2 |
 | Shared daemon | Another agent session used the same Docker daemon during the spike (`kw-spike-cc`; most likely a sibling agent, V:`observation-spike-40`) | Affects VM-wide Tetragon policies (R2) |
 
 ### 2.2 Repository inventory (PRD §14 items 1-2)
@@ -208,7 +208,7 @@ The full requirement-by-requirement matrix is Appendix A. Summary by PRD area:
 | P4 | `→ resolved` requires only a note; PRD FR-6: "new evidence establishes" | Guard requiring an independent-basis passed verification (§8 decision 11) |
 | P5 | No Claude Code stream-json source in `EventSource`; the PRD expects final response and tool results | Add `claude_code_stream_json` (migration 003, T1) |
 | P6 | Duplicate event with different content is silently dropped (`INSERT OR IGNORE`); PRD: missing or conflicting telemetry must be visible | Content-hash compare and count into coverage `errors` (C9) |
-| P7 | README says `data/kernel-witness.db`; code uses `data/kw.db` | Fix README |
+| P7 | README says `data/underwatch.db`; code uses `data/kw.db` | Fix README |
 | P8 | Retention constant shown in Settings but not documented or enforced; PRD §9: documented retention policy | `docs/RETENTION.md` + manual purge (§5.10) |
 | P9 | A developer status change on a fixture finding is written with `is_fixture: false` | Inherit `is_fixture` from the finding |
 | P10 | Addendum A asks to "enforce existing authentication and authorization"; the foundation has no authentication (loopback, single user) | Built contract (Origin + `x-kw-client`, optional `KW_API_TOKEN`) as CSRF hardening; agent isolation by unreachability (X19, P11) |
@@ -232,7 +232,7 @@ The full requirement-by-requirement matrix is Appendix A. Summary by PRD area:
 | C14 | Graph feed | outbox + worker | synchronous per-run projection | Keep staging |
 | C15 | Neo4j version | 2026.09.0 | 2026.09.0 running; `@kw/graph` dual-dialect | Keep 2026.09.0 by digest; 5.26.32 fallback with a fresh volume (X1) |
 | C16 | Process identity | `(run, boot_id, pid, start)` | staging `processId(runId, pid)` | Tetragon `exec_id`; fall back to pid with `identity_quality: weak` (gate in merge unit 3) |
-| C17 | Agent mounts | one volume; managed files via `putArchive` | volume + read-only binds for `/etc/claude-code`, `/opt/kw/kw-hook.mjs`, hooks volume | Accept the read-only binds, sourced only from `~/.kernel-witness/runs/<run>/`; a `docker inspect` mount guard rejects anything else |
+| C17 | Agent mounts | one volume; managed files via `putArchive` | volume + read-only binds for `/etc/claude-code`, `/opt/kw/kw-hook.mjs`, hooks volume | Accept the read-only binds, sourced only from `~/.underwatch/runs/<run>/`; a `docker inspect` mount guard rejects anything else |
 | C18 | Model credential | proxy-injected API key | user decision: OAuth token in the agent env | Reflect the decision; disclose R3 |
 | C19 | Reported channel | HTTP hook relay | command hooks to an agent-writable volume | Fine as reported data; host-captured stream-json is primary |
 | C20 | Entrypoint flags | `--session-id`, explicit mode | neither set; `KW_MAX_TURNS=3`, `KW_MODEL=haiku` | Fix in V0 (§4.1.4) |
@@ -276,9 +276,9 @@ The rule set before the spike: *if Tetragon works under Docker Desktop, it is th
  macOS host (TRUSTED; SIP on; no root tools) --------------------------------------------------------
  |  Browser -> Vite UI 127.0.0.1:4601 -> Fastify API 127.0.0.1:4600 (node:sqlite: data/kw.db | kw-live.db)
  |  Supervisor (in apps/server; single writer of AUTHORITATIVE EVIDENCE):                            |
- |    ~/.kernel-witness/ (0700): blobs/sha256/.., runs/<run>/manifest.ndjson, seal.json,              |
+ |    ~/.underwatch/ (0700): blobs/sha256/.., runs/<run>/manifest.ndjson, seal.json,              |
  |                               runs/<run>/claude-managed/ (per-run policy, mounted RO)              |
- |    ~/.kernel-witness/claude-oauth-token (0600) -> injected as env into the AGENT ONLY             |
+ |    ~/.underwatch/claude-oauth-token (0600) -> injected as env into the AGENT ONLY             |
  |  Docker Engine API socket: host only, never mounted into any container                           |
  ---------------------------------------------|------------------------------------------------------
    pulls: docker logs / cp / tetra getevents   |  starts, holds, pauses, inspects, removes
@@ -305,13 +305,13 @@ The rule set before the spike: *if Tetragon works under Docker Desktop, it is th
  ------------------------------------------------------------------------------------------------------
 ```
 
-Revision 2 path note: the diagram shows run evidence under `~/.kernel-witness/`. The built `FsBlobStore` for Ask Witness and safeguard artifacts writes `$REPO/data/evidence/blobs` (decision 10).
+Revision 2 path note: the diagram shows run evidence under `~/.underwatch/`. The built `FsBlobStore` for Ask Witness and safeguard artifacts writes `$REPO/data/evidence/blobs` (decision 10).
 
 - **Authoritative evidence lives only on the host.** The supervisor pulls it from the Tetragon capture, the proxy's stderr, the agent's stdout and the snapshot container. It writes content-addressed blobs and a chained manifest. No authoritative store is mounted into any container.
 - **Provenance comes from the channel, never the payload.** stream-json bytes are host-captured, but their content is agent-reported. The `/kw-hooks` spool is agent-writable, so it is reported.
 - **Two recorded deviations from the integrity design:**
   - **Credential.** The OAuth token is passed in the agent's env (user decision), not gate-injected, so the agent and every subprocess it starts can read it (R3; env scrubbing is unavailable here, §1.2 item 18).
-  - **Read-only binds.** `/etc/claude-code` and the hook forwarder are bind mounts, not `putArchive` uploads. Writes to them were denied (EMPIRICAL P3-P5). The binds must point at per-run copies under `~/.kernel-witness/runs/<run>/`.
+  - **Read-only binds.** `/etc/claude-code` and the hook forwarder are bind mounts, not `putArchive` uploads. Writes to them were denied (EMPIRICAL P3-P5). The binds must point at per-run copies under `~/.underwatch/runs/<run>/`.
 
 ### 3.4 FR-2 categories: what can be observed, blocked, or not established
 
@@ -383,7 +383,7 @@ The panel renders the built `CoverageReport` (`packages/schema/src/entities.ts`)
 | process_execution | observed | "Every process start and exit in the agent container, with parent chain and arguments (Tetragon). Process IDs are Docker VM IDs." | partial: "Tetragon gap {from}-{to}." / unavailable: "No process observer active." |
 | file_access | partial | "Recorded only for watched paths: {paths}. An open or read event does not prove the content was used. Access to other paths is not recorded." | unavailable: "No file-access observer active; file access is unknown." |
 | file_modification | partial | "Before/after state of /workspace from trusted manifests. Files created and deleted during the run, and changes on other volumes, may not appear." | "Final file state unknown: post-run manifest missing ({reason})." |
-| network | partial | "All egress goes through the Kernel Witness proxy; direct connections have no route. Each attempt's destination and allow/deny is recorded. Bytes and content are not recorded; the requesting process is matched by time only." | unavailable: "Proxy log missing; network attempts unknown." |
+| network | partial | "All egress goes through the Underwatch proxy; direct connections have no route. Each attempt's destination and allow/deny is recorded. Bytes and content are not recorded; the requesting process is matched by time only." | unavailable: "Proxy log missing; network attempts unknown." |
 | permission_decisions | partial | "Claude Code's own decisions are reported by the agent. Independent denials: {n_proxy} by the egress proxy, {n_lsm} by Tetragon file blocks." | — |
 | tool_calls | partial | "Reported by the agent (stream-json, hooks). Shell commands and file access can be corroborated by process and time; individual tool calls cannot be independently confirmed." | unavailable: "No reported tool-call stream captured." |
 | agent_reported_actions | observed | "Final response captured live on the host. Content is the agent's own account." | partial: "Run ended without a final result record ({terminal_reason})." |
@@ -418,7 +418,7 @@ The panel renders the built `CoverageReport` (`packages/schema/src/entities.ts`)
 
 | # | Risk | Disclosure or mitigation |
 |---|---|---|
-| R1 | **Container escape gives root in the shared VM**, which defeats Tetragon and the proxy. Docker Desktop file sharing may expose `/Users`, including `data/` and `~/.kernel-witness` (UNVERIFIED for this host: Settings → Resources → File sharing). | Non-root, cap-drop ALL, no Docker socket, pinned images. Stated as the main limit in the README. |
+| R1 | **Container escape gives root in the shared VM**, which defeats Tetragon and the proxy. Docker Desktop file sharing may expose `/Users`, including `data/` and `~/.underwatch` (UNVERIFIED for this host: Settings → Resources → File sharing). | Non-root, cap-drop ALL, no Docker socket, pinned images. Stated as the main limit in the README. |
 | R2 | **Tetragon is privileged and VM-wide.** A mis-scoped enforce policy can deny other containers; another session shared the daemon. Any process with Docker access can `tracingpolicy delete`. | Generate every policy per run with a pid-ns selector, delete it at run end, never load global enforce policies. |
 | R3 | **The OAuth token is readable by the agent and by every Bash and hook subprocess** (env, `/proc/<pid>/environ`; Yama absent). Known EMPIRICAL limitation: `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` makes Claude Code 2.1.302 exit at startup in this container (§1.2 item 18), so it is **not** set. | Disclose; dedicated account; rotate after the demo; exfiltration bounded to allowlisted Anthropic hosts (and to in-VM listeners until P11 passes). Every generated per-run policy keeps the base policy's `Read(//proc/**)` and `Edit(//proc/**)` denies and `blockReadsOutsideWorkingDirectories` (these stop the agent's own Read tool, not a subprocess). |
 | R4 | **Reported data can be fabricated** (stdout lines, hook spool, transcript). | "Reported by agent" badge everywhere; violations derived only from independent evidence. |
@@ -768,7 +768,7 @@ Rules:
 1. **Lock.** One live run at a time: `compose.agent.yml` hard-codes `container_name` and network names.
 2. **Create.** Mint `run_id` and a session UUID. Snapshot the policy as canonical JSON → immutable `policy_versions` row with `content_sha256`. Record the task, repository template and revision, and the Docker Desktop, kernel, Tetragon, Claude Code and image digests in `run.open`.
 3. **Prepare the workspace.** Populate the per-run volume from the scenario repo (decision 8; default: the built `fixtures/workspace-template/`, or the authorized demo workspace once a `CLAUDE.md` safeguard was applied to it) plus scenario setup (as root; per-run canary `KW-CANARY-<uuid>`; helper hash recorded). Take pre-manifest **P0** (§5.5).
-4. **Generate per-run managed settings** into `~/.kernel-witness/runs/<run>/claude-managed/` (0644): the complete allow list, policy denies, `WebSearch`/`WebFetch`/`Task` deny, managed-only keys, applied safeguards. Run the `docker inspect` mount guard (read-only binds only from that directory; `no-new-privileges` true; no socket).
+4. **Generate per-run managed settings** into `~/.underwatch/runs/<run>/claude-managed/` (0644): the complete allow list, policy denies, `WebSearch`/`WebFetch`/`Task` deny, managed-only keys, applied safeguards. Run the `docker inspect` mount guard (read-only binds only from that directory; `no-new-privileges` true; no socket).
 5. **Start the proxy, then the agent in a held state.** The entrypoint waits for a go-signal before `exec claude` (P3).
 6. **Attach the observer.** Read the agent's pid-ns inode. Load the per-run observe policy (watched prefixes) and, for treatment runs, the LSM restriction scoped to that inode. Start the `getevents` capture to the host.
 7. **Self-test, then release.**
@@ -909,7 +909,7 @@ verification_state: not_tested ──► running ──► passed (tested scenar
 | **Edit / reject** | An edit appends a new `safeguard_versions` row (new `content_sha256`, T4); reject is terminal for that version. The original proposal is kept. |
 | **Approve** | `user` only. The body echoes `content_sha256`; mismatch → 409. |
 | **Workspace check** | The target must be an authorized workspace (`workspaces`, `status = active`; `kind` per decision 9) and the path must resolve inside it (`ClaudeMdRelPath`, realpath, no symlink escape). Otherwise → "copyable patch" only, never "applied" (Addendum §4.5). |
-| **Apply** | A separate request (the addendum's combined "approve and apply" maps onto approve, then apply). By type:<br>- `CLAUDE.md`: hash compare-and-swap against the version's base hash; mismatch → 409 `file_conflict` with a regenerated diff and re-approval. Otherwise store before and after blobs, write atomically, read back, record a `workspace_file_changes` row.<br>- Permission rule: managed drop-in.<br>- Environment restriction: Tetragon policy (`observer-tetragon` `applyEnforcement`).<br>Each apply writes a new `policy_versions` row that future KW runs pin. `application_status` comes from read-back. UI copy: "Applied to workspace ‹label› for Kernel Witness supervised runs". **Rollback** re-applies the before-blob as a new audited change. |
+| **Apply** | A separate request (the addendum's combined "approve and apply" maps onto approve, then apply). By type:<br>- `CLAUDE.md`: hash compare-and-swap against the version's base hash; mismatch → 409 `file_conflict` with a regenerated diff and re-approval. Otherwise store before and after blobs, write atomically, read back, record a `workspace_file_changes` row.<br>- Permission rule: managed drop-in.<br>- Environment restriction: Tetragon policy (`observer-tetragon` `applyEnforcement`).<br>Each apply writes a new `policy_versions` row that future KW runs pin. `application_status` comes from read-back. UI copy: "Applied to workspace ‹label› for Underwatch supervised runs". **Rollback** re-applies the before-blob as a new audited change. |
 | **Strength badge** | Always shown (§4.1.7). |
 
 **Verification run** (BUILT `verification_runs` + 002 v2 columns; one row per repetition with `arm` and `repetition`, T7). The test plan (restricted case, legitimate case, expected results) is stored in `cases[]` before start. It runs as an ordinary supervised run through the stream-2 runner (`run_id`), never through a separate harness. If the block holds but legit work breaks, both results are shown, and the user can revise; a revision needs a new review and a new run, and is never weakened automatically.
@@ -935,7 +935,7 @@ verification_state: not_tested ──► running ──► passed (tested scenar
 ### 5.9 Evidence integrity
 
 ```
-~/.kernel-witness/            0700; server refuses to start if group/world-accessible
+~/.underwatch/            0700; server refuses to start if group/world-accessible
   blobs/sha256/ab/<64hex>     raw bytes: tmp -> fsync -> rename -> chmod 0444 (content-addressed)
   runs/<run>/manifest.ndjson  {v, runId, seq, kind, source, basis, receivedAt, blob:{sha256,size}, prev, hash}
                               hash = sha256(canonical(entry without hash)); prev = previous hash ('0'*64 at seq 0)
@@ -943,7 +943,7 @@ verification_state: not_tested ──► running ──► passed (tested scenar
   runs/<run>/claude-managed/  per-run managed settings (mounted read-only)
 ```
 
-- **Location (decision 10):** the layout above is for supervised-run evidence. The built `FsBlobStore` (`apps/server/src/services/blobs.ts`) writes Ask Witness and safeguard artifacts to `$REPO/data/evidence/blobs/<aa>/<sha256>` (0600, tmp + rename, no fsync, no 0444). Default: reuse the `BlobStore` interface with a second root at `~/.kernel-witness/blobs` for run evidence; add fsync and 0444 there.
+- **Location (decision 10):** the layout above is for supervised-run evidence. The built `FsBlobStore` (`apps/server/src/services/blobs.ts`) writes Ask Witness and safeguard artifacts to `$REPO/data/evidence/blobs/<aa>/<sha256>` (0600, tmp + rename, no fsync, no 0444). Default: reuse the `BlobStore` interface with a second root at `~/.underwatch/blobs` for run evidence; add fsync and 0444 there.
 - **Kinds:** `run.open`, `segment`, `gap`, `mount_check`, `selftest`, `run.close`.
 - **`verifyRun()`:** `seq` contiguous, `prev` chain intact, hashes recompute, blobs exist and re-hash. A missing blob counts as "purged" only if the audit log records the purge. States: `verified | verified_with_purged_blobs | not_sealed | broken`.
 - **Linking:** `Evidence.integrity_metadata` holds the blob hash and manifest seq; `source_reference` holds the locator (`raw/stream.jsonl#L42`).
@@ -1010,7 +1010,7 @@ verification_state: not_tested ──► running ──► passed (tested scenar
 
 **These measures are CSRF hardening only. They do not stop a process that can reach the API.** Any process that can reach 127.0.0.1:4600 or 4601 can load the UI, read an HTML-embedded token, set any header and POST `/api/safeguards/:id/approve`; the `Host` and `Origin` headers are client-controlled. **"The agent cannot approve its own safeguards" (PRD FR-9, §7.2) rests only on network unreachability**: the agent's only network is `internal`, and the extended P11 (§3.8) must show at every run start that the gateway, `host.docker.internal` and every published port, 4600/4601 included, are unreachable, or the run is refused. If P11 ever shows the API is reachable, a token is not the fix. Either:
 1. move the API off that path: a Unix socket, or a host interface no container can route to, with Vite proxying the socket; or
-2. take the credential from somewhere the agent cannot read: `KW_API_TOKEN` in a host-only file (`~/.kernel-witness/api-token`, 0600), handed to the browser once through a launch URL (`pnpm dev` prints `http://127.0.0.1:4601/#t=…`) and kept in `sessionStorage` or an HttpOnly cookie set on that first load. It is never embedded in served HTML.
+2. take the credential from somewhere the agent cannot read: `KW_API_TOKEN` in a host-only file (`~/.underwatch/api-token`, 0600), handed to the browser once through a launch URL (`pnpm dev` prints `http://127.0.0.1:4601/#t=…`) and kept in `sessionStorage` or an HttpOnly cookie set on that first load. It is never embedded in served HTML.
 
 Multi-user auth stays out of scope (decision 6).
 
@@ -1285,14 +1285,14 @@ Dropped from revision 1: the overhead pair (M7 is reported as "not measured"), `
 | 1 | `packages/analysis` | tests; correlation B2/B3 fixes + property test; imports neither inference nor graph (grep); fx-01..05 agreement table |
 | 2 | `packages/graph` | **`tool_spawn` edges forced `inferred` + projection test; `exec_id` process identity with weak-pid fallback**; tests against live `kw-neo4j` 2026.09.0; project fixtures twice → same counts |
 | 3 | `packages/adapter-claude-code` | contract tests on host probe runs 1-3 **and `smoke/` (10:39 in-container capture)**, including top-level `uuid` and `parent_tool_use_id` |
-| 4 | `docker/compose.dev.yml` | digest pin unchanged; points at the running `kw-neo4j`; password file under `~/.kernel-witness/` |
+| 4 | `docker/compose.dev.yml` | digest pin unchanged; points at the running `kw-neo4j`; password file under `~/.underwatch/` |
 | 5 | migration 003 (T1-T8) + S7 | `db.test`: UPDATE/DELETE on `events` aborts; schema + server + addendum tests green |
 
 **Mechanics:**
 - `rsync -a --exclude node_modules --exclude dist $KN/packages/<pkg>/ $REPO/packages/<pkg>/`, one commit per unit; revert only the failing unit.
 - Typecheck each unit against `$REPO/packages/schema` (never against `$KN`'s).
 - **After 12:30 all work is in `$REPO`.**
-- Move `$KN/.env.neo4j*` to `~/.kernel-witness/` (0600).
+- Move `$KN/.env.neo4j*` to `~/.underwatch/` (0600).
 - `.gitignore` already covers `.env*` and `data/*`; add `.kw-data/` and `reports/raw/`.
 - Merge windows: 11:50, 12:15, 12:45, then every :15/:45 (offset from stream 0's commits).
 
@@ -1363,7 +1363,7 @@ Decisions 1-4 are needed at the **11:30 checkpoint**; the rest by 13:15. Each li
 7. **Docker Desktop.** Freeze 4.57.0 with auto-update off; leave file sharing unchanged today and disclose it (R1). **Default: yes.**
 8. **Scenario repo and restricted action.** Use the built `fixtures/workspace-template/` (extended with the `invoice-kit` code) as both the demo workspace for `CLAUDE.md` writes and the template every supervised run copies; the restricted action is a synthetic secret-file read (`scn.direct`; `scn.subprocess` variant). **Default: yes.**
 9. **Workspace kinds.** Allow only `demo` workspaces for the hackathon; `user` workspaces (any directory via `POST /api/workspaces {confirm:true}`) stay behind `KW_ALLOW_USER_WORKSPACES=1`. **Default: demo only.**
-10. **Evidence location.** Keep the built `$REPO/data/evidence/blobs` for Ask Witness and safeguard artifacts; store supervised-run evidence and manifests under `~/.kernel-witness/` (0700). **Default: yes.**
+10. **Evidence location.** Keep the built `$REPO/data/evidence/blobs` for Ask Witness and safeguard artifacts; store supervised-run evidence and manifests under `~/.underwatch/` (0700). **Default: yes.**
 11. **Lifecycle rules.** `resolved` requires an independent-basis "Passed" verification (or an audited override citing later-run evidence, with a note); never auto-confirm findings; the SG-C environment restriction is a supported mechanism labelled "inside KW runs only". **Default: yes.**
 12. **Agent-enforced verification label.** For permission-rule safeguards (SG-B), show only **"Inconclusive: agent-reported denial, no independent attestation"**, or also allow a separately labelled "Passed (agent-reported basis)" when you accept that basis in the test plan. **Default: Inconclusive only.**
 13. **Sponsor tech.** Neo4j: local CE 2026.09.0 (running, digest-pinned; 5.26.32 fallback on a fresh volume), keeping the PRD relationship names and projecting the addendum's `ADDRESSES`/`TESTS` as inverses. ai&: `deepseek-ai/deepseek-v4-flash`, about $1 budget, content logging off, up-to-30-day retention in Japan accepted with synthetic data only; the supervised agent is not routed through ai&. Ask on Discord whether judges expect AuraDB or a specific ai& model. **Default: yes.**
@@ -1468,7 +1468,7 @@ UNOWNED sub-labels name the missing piece:
 
 | ID | Requirement | Owner | Slice | Verify | Status | Notes / gap |
 |---|---|---|---|---|---|---|
-| FR1.1 | Create a supervised session | UNOWNED `supervisor`; `env` (agent-smoke only) | S2 | LR | not started; blocked on Claude OAuth token | agent-smoke runs one container but creates no KW Run row. `~/.kernel-witness/claude-oauth-token` did not exist at the snapshot. |
+| FR1.1 | Create a supervised session | UNOWNED `supervisor`; `env` (agent-smoke only) | S2 | LR | not started; blocked on Claude OAuth token | agent-smoke runs one container but creates no KW Run row. `~/.underwatch/claude-oauth-token` did not exist at the snapshot. |
 | FR1.2 | Review sessions (list and detail) | `server`, `web` | S1 | AT, FX | foundation | Uses fixture runs only. |
 | FR1.3 | Run carries ID, agent and adapter, start/end, task, repo ID and revision, policy version, coverage status, event and finding counts, run status | `schema`, `server` | S1 | AT (api.test "run detail with complete count records") | foundation | The live repo revision must come from the `supervisor` (UNOWNED). |
 | FR1.4 | Initial adapter targets Claude Code through documented integration points | `adapter` | S2 | AT on real captures, LR | staging | Hooks, transcript and stream-json are LOCAL-EMPIRICAL (host-side probe runs 1–3), but none of it has been exercised inside a container yet. |
@@ -1748,7 +1748,7 @@ UNOWNED sub-labels name the missing piece:
 
 | Blocker | Blocks | Unblocks when |
 |---|---|---|
-| Claude OAuth token missing (`~/.kernel-witness/claude-oauth-token` absent at snapshot) | FR1.1, FR3.1 live, AC1, any LR, FX3/4 live, FX8–10 | The user runs `claude setup-token` and saves the file |
+| Claude OAuth token missing (`~/.underwatch/claude-oauth-token` absent at snapshot) | FR1.1, FR3.1 live, AC1, any LR, FX3/4 live, FX8–10 | The user runs `claude setup-token` and saves the file |
 | ai& key missing (`81agents/.env.local` absent) and no fact-check verdict on the ai& API surface | FR7.1 live, FR7.6a, AC15 live, UI6.6b, UI6.9b (ai&), M8 | Key added; `verify:ai-and` verdicts land; one live smoke call |
 | Managed-settings behavior in container is UNVERIFIED (path `/etc/claude-code/managed-settings.json`, `allowManagedPermissionRulesOnly`, `allowManagedHooksOnly` on 2.1.302) | FR9.9, FR9.13, SEC4, permission-rule safeguards | An in-container conformance run (needs the token) |
 | No owner for observer, supervisor, safeguard workflow or verifier | All demo steps after "agent runs" | Assign workstreams |

@@ -1,4 +1,4 @@
-# Kernel Witness - controlled execution environment for ONE supervised agent run.
+# Underwatch - controlled execution environment for ONE supervised agent run.
 # Separate from compose.dev.yml (Neo4j etc.). Driven by scripts/agent-smoke.sh;
 # the server's run supervisor is expected to set the same variables.
 #

@@ -11,6 +11,7 @@
 import { createTwoFilesPatch } from "diff";
 import type { InferenceResult } from "@kw/inference";
 import {
+  ANY_CLAUDE_MD_MARKER_RE,
   claudeMdBlockMarkers,
   DEFAULT_CLAUDE_MD_PATH,
   ID_PART_SEPARATOR,
@@ -130,8 +131,8 @@ function validateContent(type: SafeguardType, content: string, safeguardId: stri
   const { begin, end } = claudeMdBlockMarkers(safeguardId);
   switch (type) {
     case "claude_md_instruction":
-      if (content.includes(begin) || content.includes(end) || /kernel-witness:safeguard/.test(content)) {
-        throw new ApiHttpError("validation_error", "Instruction text must not contain Kernel Witness block markers.");
+      if (content.includes(begin) || content.includes(end) || ANY_CLAUDE_MD_MARKER_RE.test(content)) {
+        throw new ApiHttpError("validation_error", "Instruction text must not contain Underwatch block markers.");
       }
       return { content };
     case "permission_rule": {
@@ -277,7 +278,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
       const md = await ws().readClaudeMd(w.id, DEFAULT_CLAUDE_MD_PATH);
       if (md.content && facts.resources.some((r) => md.content!.includes(r))) {
         extraNotes.push(
-          `The current CLAUDE.md already mentions ${facts.resources.join(", ")}; Kernel Witness did not interpret that text (it is untrusted). Review the diff for overlap.`,
+          `The current CLAUDE.md already mentions ${facts.resources.join(", ")}; Underwatch did not interpret that text (it is untrusted). Review the diff for overlap.`,
         );
       }
     }
@@ -302,7 +303,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
     if (aiResult?.status === "ok") {
       const v = aiResult.value;
       md.content = v.instruction;
-      md.rationale = `${v.rationale} (Wording refined by ai& from the Kernel Witness template; every cited evidence id was checked against the evidence bundle.)`;
+      md.rationale = `${v.rationale} (Wording refined by ai& from the Underwatch template; every cited evidence id was checked against the evidence bundle.)`;
       md.limitations = [...md.limitations, ...v.limitations.map((l) => `ai& note: ${l}`)];
       md.evidence_ids = v.evidence_ids;
       mdAuthor = "ai";
@@ -515,7 +516,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
               version_id: version.id,
               action: "application_failed",
               actor_type: "system",
-              actor: "kernel-witness",
+              actor: "underwatch",
               note: "Writing CLAUDE.md failed; the file was not confirmed changed.",
               details: { workspace_id: workspaceId, rel_path: relPath },
               at,
@@ -530,7 +531,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
             version_id: version.id,
             action: "conflict_detected",
             actor_type: "system",
-            actor: "kernel-witness",
+            actor: "underwatch",
             note: "CLAUDE.md changed since the diff was generated; nothing was written.",
             details: { expected_sha256: result.conflict.expected_before_sha256, current_sha256: result.conflict.current_sha256, rel_path: relPath },
             at,
@@ -545,7 +546,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
             version_id: version.id,
             action: "applied",
             actor_type: "system",
-            actor: "kernel-witness",
+            actor: "underwatch",
             details: { change_id: change.id, workspace_id: workspaceId, rel_path: relPath, before_sha256: change.before_sha256, after_sha256: change.after_sha256 },
             at,
           });
@@ -564,8 +565,8 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
             version_id: version.id,
             action: "applied",
             actor_type: "system",
-            actor: "kernel-witness",
-            note: "Added to Kernel Witness's supervised-run policy overlay. Your repository and your own Claude Code settings were not changed.",
+            actor: "underwatch",
+            note: "Added to Underwatch's supervised-run policy overlay. Your repository and your own Claude Code settings were not changed.",
             details: { policy_overlay: overlay.rel_path, sha256: overlay.sha256, deny: rules.deny, ask: rules.ask },
             at,
           });
@@ -583,7 +584,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
             version_id: version.id,
             action: "applied",
             actor_type: "system",
-            actor: "kernel-witness",
+            actor: "underwatch",
             note: "Recorded as a kernel enforcement safeguard: a Tetragon deny-file-open policy is loaded per run, scoped to that run's disposable agent container only, and removed afterwards. Nothing on your Mac or in your repository changes.",
             details: { target: "disposable_agent_container", deny_open_paths: parsed.ok ? parsed.paths : [] },
             at,
@@ -593,7 +594,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
         return { detail: await get(id), change: null };
       }
 
-      // regression_test: stored as a Kernel Witness scenario; nothing is written anywhere.
+      // regression_test: stored as a Underwatch scenario; nothing is written anywhere.
       transaction(db, () => {
         approvedEvent({ application: "scenario" });
         store.appendEvent(db, {
@@ -601,8 +602,8 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
           version_id: version.id,
           action: "applied",
           actor_type: "system",
-          actor: "kernel-witness",
-          note: "Scenario stored in Kernel Witness and linked to the finding. Nothing was written to your repository.",
+          actor: "underwatch",
+          note: "Scenario stored in Underwatch and linked to the finding. Nothing was written to your repository.",
           details: { target: "scenario", cases: version.verification_plan.cases.length },
           at,
         });
@@ -627,7 +628,7 @@ export function createSafeguardService(ctx: ServerContext): SafeguardService {
           version_id: change.version_id,
           action: "conflict_detected",
           actor_type: "system",
-          actor: "kernel-witness",
+          actor: "underwatch",
           note: "CLAUDE.md changed after the safeguard was applied; rollback wrote nothing.",
           details: { change_id: change.id, expected_sha256: res.conflict.expected_before_sha256, current_sha256: res.conflict.current_sha256 },
           at,

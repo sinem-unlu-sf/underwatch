@@ -32,7 +32,7 @@ const SUPPORT_TONE: Record<EvidenceSupport, Tone> = {
 
 export function SupportBadge({ support }: { support: EvidenceSupport }) {
   return (
-    <Badge tone={SUPPORT_TONE[support]} title="Assigned by Kernel Witness from the cited records in the bundle sent to ai&, not by the model">
+    <Badge tone={SUPPORT_TONE[support]} title="Assigned by Underwatch from the cited records in the bundle sent to ai&, not by the model">
       {EVIDENCE_SUPPORT_LABELS[support]}
     </Badge>
   );
@@ -42,7 +42,7 @@ export function SupportBadge({ support }: { support: EvidenceSupport }) {
 const HYPOTHESIS_CITES_LABEL: Record<EvidenceSupport, string> = {
   observed_evidence: "Cites an observed record (hypothesis not confirmed)",
   reported_evidence_only: "Cites agent-reported records only",
-  derived_only: "Cites Kernel Witness analysis only",
+  derived_only: "Cites Underwatch analysis only",
   unsupported: EVIDENCE_SUPPORT_LABELS.unsupported,
 };
 
@@ -144,7 +144,7 @@ function ActionClaimFlags({ flags }: { flags: ActionClaimFlag[] }) {
   if (flags.length === 0) return null;
   return (
     <section aria-label="Unconfirmed action claims" className="space-y-1 rounded-[3px] border border-risk/50 bg-risk/5 px-2 py-1.5">
-      <h4 className="text-[11px] font-semibold tracking-wide text-risk uppercase">Unconfirmed action claims (checked by Kernel Witness, not the AI)</h4>
+      <h4 className="text-[11px] font-semibold tracking-wide text-risk uppercase">Unconfirmed action claims (checked by Underwatch, not the AI)</h4>
       <ul className="space-y-1 text-[12px] text-fg-1">
         {flags.map((f, i) => (
           <li key={i}>
@@ -188,7 +188,7 @@ export function AnswerBody({
 
       {answer.evidence_limitations && answer.evidence_limitations.length > 0 ? (
         <section aria-label="Limits of the evidence sent" className="space-y-1 rounded-[3px] border border-line px-2 py-1.5">
-          <h4 className="text-[11px] font-semibold tracking-wide text-unknown uppercase">Limits of the evidence sent (written by Kernel Witness, not the AI)</h4>
+          <h4 className="text-[11px] font-semibold tracking-wide text-unknown uppercase">Limits of the evidence sent (written by Underwatch, not the AI)</h4>
           <ul className="list-inside list-disc space-y-0.5 text-[12px] text-fg-1">
             {answer.evidence_limitations.map((l, i) => (
               <li key={i}>{l}</li>
@@ -199,7 +199,7 @@ export function AnswerBody({
 
       <ClaimSection
         title="Backed by observed evidence"
-        hint="Each cites at least one independently observed record that was in the bundle (checked by Kernel Witness). The record exists; read it to confirm the claim."
+        hint="Each cites at least one independently observed record that was in the bundle (checked by Underwatch). The record exists; read it to confirm the claim."
         claims={observed}
         ev={ev}
         tone="text-observed"
@@ -212,7 +212,7 @@ export function AnswerBody({
         ev={ev}
         tone="text-reported"
       />
-      <ClaimSection title="Supported only by Kernel Witness analysis" hint="Cites only derived records (findings, correlations, policy rules), not raw evidence." claims={derived} ev={ev} />
+      <ClaimSection title="Supported only by Underwatch analysis" hint="Cites only derived records (findings, correlations, policy rules), not raw evidence." claims={derived} ev={ev} />
       <ClaimSection title="Hypotheses" hint="Plausible explanations that are not confirmed." claims={answer.hypotheses} ev={ev} empty="None offered." hypothesis />
 
       <Section title="Unknowns" count={answer.unknowns.length}>
@@ -339,7 +339,7 @@ function CopyAnswer({ text }: { text: string }) {
 /**
  * One recorded turn, chat style: the question as a compact right-aligned bubble; the answer as plain text (summary
  * first), a row of citation chips, and a collapsed "Sources & reasoning" disclosure holding every structured section
- * with its Kernel Witness-assigned label and the citation check. Tiny actions underneath.
+ * with its Underwatch-assigned label and the citation check. Tiny actions underneath.
  */
 export function TurnView({
   turn,

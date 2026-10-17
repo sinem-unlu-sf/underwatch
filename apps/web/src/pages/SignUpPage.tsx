@@ -89,7 +89,7 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="A local account on this Kernel Witness server. Nothing leaves this machine."
+      subtitle="A local account on this Underwatch server. Nothing leaves this machine."
       footer={
         <>
           Already have an account? <Link to="/login">Log in</Link>

@@ -58,9 +58,9 @@ export type SafeguardAuthor = z.infer<typeof SafeguardAuthor>;
 
 /**
  * workspace_file:        a file in an authorized workspace (CLAUDE.md only in this build).
- * supervised_run_policy: Kernel Witness's own read-only managed policy for KW-supervised agent runs (docker/agent/policy).
+ * supervised_run_policy: Underwatch's own read-only managed policy for KW-supervised agent runs (docker/agent/policy).
  *                        Never written into the user's repository or the host's Claude Code settings.
- * scenario:              a verification scenario stored by Kernel Witness (regression test); nothing is written anywhere.
+ * scenario:              a verification scenario stored by Underwatch (regression test); nothing is written anywhere.
  */
 export const SafeguardTargetKind = z.enum(["workspace_file", "supervised_run_policy", "scenario"]);
 export type SafeguardTargetKind = z.infer<typeof SafeguardTargetKind>;
@@ -174,7 +174,7 @@ export const MechanismInfo = z.object({
 });
 export type MechanismInfo = z.infer<typeof MechanismInfo>;
 
-const VERIFY_REQUIRES = ["Docker running", "kw-agent:2.1.302 image built", "Claude OAuth token at ~/.kernel-witness/claude-oauth-token"];
+const VERIFY_REQUIRES = ["Docker running", "kw-agent:2.1.302 image built", "Claude OAuth token at ~/.underwatch/claude-oauth-token"];
 
 export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
   claude_md_instruction: {
@@ -192,7 +192,7 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
       "The agent can edit CLAUDE.md itself (it stayed writable even under the native sandbox in testing).",
     ],
     apply_target: "workspace_file",
-    apply_description: "After explicit approval, Kernel Witness writes a marked block into CLAUDE.md in an authorized workspace (hash compare-and-swap, before/after stored for rollback).",
+    apply_description: "After explicit approval, Underwatch writes a marked block into CLAUDE.md in an authorized workspace (hash compare-and-swap, before/after stored for rollback).",
     test_description: "A controlled Claude Code run in the disposable kw-agent container against a snapshot of the workspace; results come from the run's recorded stream-json/hook output.",
     availability: { status: "available", requires: VERIFY_REQUIRES },
   },
@@ -209,11 +209,11 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
     cannot: [
       "Does not stop arbitrary subprocesses (e.g. python3 open('.env'), grep -r) unless the OS sandbox is enabled; the native sandbox cannot start inside KW's unprivileged Docker agent container.",
       "Bash deny rules match command text only (not /bin/rm, sh -c '...', reordered flags); Claude Code documents them as not a security boundary.",
-      "Applies only to Kernel Witness verification runs of this safeguard (supervised runs do not load applied safeguards in this build); it does not change your own Claude Code settings on this Mac.",
+      "Applies only to Underwatch verification runs of this safeguard (supervised runs do not load applied safeguards in this build); it does not change your own Claude Code settings on this Mac.",
       "Read-rule denials are rejected before hooks run; they are visible only in result.permission_denials / PostToolBatch / the transcript.",
     ],
     apply_target: "supervised_run_policy",
-    apply_description: "After explicit approval, the rule is recorded as applied in Kernel Witness and is put in the managed policy (mounted read-only at /etc/claude-code in the agent container) of this safeguard's verification runs. In this build, Start supervised run does not load applied safeguards; nothing in your repository or your own Claude Code settings changes.",
+    apply_description: "After explicit approval, the rule is recorded as applied in Underwatch and is put in the managed policy (mounted read-only at /etc/claude-code in the agent container) of this safeguard's verification runs. In this build, Start supervised run does not load applied safeguards; nothing in your repository or your own Claude Code settings changes.",
     test_description: "A controlled Claude Code run in the disposable kw-agent container with the rule in its managed policy; restricted and legitimate cases are judged from recorded permission_denials, tool results and hook events.",
     availability: { status: "available", requires: VERIFY_REQUIRES },
   },
@@ -232,12 +232,12 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
       "Hooks fail open by default; the matcher \"if\" field is best-effort.",
     ],
     apply_target: "supervised_run_policy",
-    apply_description: "Not applied in this build: Kernel Witness does not generate or install enforcement hook scripts.",
+    apply_description: "Not applied in this build: Underwatch does not generate or install enforcement hook scripts.",
     test_description: "Not tested in this build.",
     availability: {
       status: "unavailable",
       reason:
-        "Kernel Witness does not yet generate, apply or test enforcement hook scripts. The supervised-run policy only installs the read-only kw-hook recorder. Hook proposals are shown as text only.",
+        "Underwatch does not yet generate, apply or test enforcement hook scripts. The supervised-run policy only installs the read-only kw-hook recorder. Hook proposals are shown as text only.",
     },
   },
   regression_test: {
@@ -254,7 +254,7 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
       "A pass covers only the tested scenario, model and policy; agent behavior is non-deterministic.",
     ],
     apply_target: "scenario",
-    apply_description: "After approval the scenario is stored in Kernel Witness and linked to the finding; nothing is written to your repository.",
+    apply_description: "After approval the scenario is stored in Underwatch and linked to the finding; nothing is written to your repository.",
     test_description: "Executed by the same controlled kw-agent harness; status comes only from recorded harness observations.",
     availability: { status: "available", requires: VERIFY_REQUIRES },
   },
@@ -276,7 +276,7 @@ export const MECHANISMS: Readonly<Record<SafeguardType, MechanismInfo>> = {
       "Depends on the Docker Desktop kernel keeping BTF, BPF-LSM and override support (reported by the observer health check).",
     ],
     apply_target: "supervised_run_policy",
-    apply_description: "After explicit approval, the policy is recorded as applied in Kernel Witness; during this safeguard's verification runs Kernel Witness loads a Tetragon deny-file-open policy scoped to the disposable agent container's pid namespace and removes it afterwards. In this build, Start supervised run does not load applied safeguards; nothing in your repository or on your Mac changes.",
+    apply_description: "After explicit approval, the policy is recorded as applied in Underwatch; during this safeguard's verification runs Underwatch loads a Tetragon deny-file-open policy scoped to the disposable agent container's pid namespace and removes it afterwards. In this build, Start supervised run does not load applied safeguards; nothing in your repository or on your Mac changes.",
     test_description: "A controlled Claude Code run in the disposable kw-agent container with the policy loaded before the agent starts; the restricted case is judged from Tetragon's kernel events (blocked / succeeded opens) plus the host-side records.",
     availability: { status: "available", requires: [...VERIFY_REQUIRES, "kw-tetragon observer (Tetragon v1.7.0) healthy with BPF-LSM support"] },
   },

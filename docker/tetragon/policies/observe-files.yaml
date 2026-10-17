@@ -1,4 +1,4 @@
-# Kernel Witness - observe-files (monitor only, no enforcement)
+# Underwatch - observe-files (monitor only, no enforcement)
 #
 # security_file_open      -> file.open  (return value: 0 = open permitted, <0 = failed)
 # security_file_permission-> file.read / file.write (arg 1 mask: 4 = MAY_READ, 2 = MAY_WRITE)

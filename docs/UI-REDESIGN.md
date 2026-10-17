@@ -1,4 +1,4 @@
-# Kernel Witness: UI redesign report
+# Underwatch: UI redesign report
 
 Verified 13:13–13:24 JST, 2026-10-17. The spec is `docs/UI-REDESIGN-PRD.md`, plus the parts of Addendum C that still apply. This redesign is a restyle of the existing app: no backend routes were rewritten, and no mock data was added. Nothing is committed; the restore point is `407181e`.
 

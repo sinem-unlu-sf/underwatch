@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `pnpm open`: opens the Kernel Witness UI with the local API token (data/auth-token) in the URL.
+// `pnpm open`: opens the Underwatch UI with the local API token (data/auth-token) in the URL.
 // The token is passed only to the OS URL opener as an argument (no shell); it is never printed to stdout.
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -26,8 +26,8 @@ const opener = process.platform === "darwin" ? "open" : process.platform === "wi
 execFile(opener, [url], (err) => {
   if (err) {
     // err.message would echo the command line (with the token), so only the exit code is reported.
-    console.error(`Could not launch a browser (${opener}, code ${String(err.code ?? "unknown")}). Copy the "Open Kernel Witness" URL from the server log instead.`);
+    console.error(`Could not launch a browser (${opener}, code ${String(err.code ?? "unknown")}). Copy the "Open Underwatch" URL from the server log instead.`);
     process.exit(1);
   }
-  console.log("Opened Kernel Witness at http://127.0.0.1:4601/overview (token passed to the browser, not printed).");
+  console.log("Opened Underwatch at http://127.0.0.1:4601/overview (token passed to the browser, not printed).");
 });

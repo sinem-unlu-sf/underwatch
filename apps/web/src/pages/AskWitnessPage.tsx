@@ -26,7 +26,7 @@ import { useUrlFilters } from "../lib/searchParams";
 
 /**
  * Ask Witness workspace (full page). Same server routes, evidence rules and answer rendering as the drawer and the
- * finding panel: the server answers from a small, capped, redacted bundle of Kernel Witness's own records for the chosen
+ * finding panel: the server answers from a small, capped, redacted bundle of Underwatch's own records for the chosen
  * scope and validates every citation; this page renders the validated turns with TurnView. Nothing is fetched in the
  * background and nothing opens by itself. Scope, run, finding and investigation live in the URL so a view is linkable.
  */

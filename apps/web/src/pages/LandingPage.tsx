@@ -10,7 +10,7 @@ import { LogoMark } from "../components/shell/nav";
 export function LandingPage() {
   useEffect(() => {
     const prev = document.title;
-    document.title = "Kernel Witness: verify what your coding agent did";
+    document.title = "Underwatch: verify what your coding agent did";
     return () => {
       document.title = prev;
     };
@@ -44,9 +44,9 @@ function LandingNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-[#09090B]/80 backdrop-blur-md">
       <div className={`${wrap} flex h-14 items-center justify-between gap-4`}>
-        <Link to="/" className="flex items-center gap-2 rounded-sm text-[14px] font-semibold tracking-tight" aria-label="Kernel Witness home">
+        <Link to="/" className="flex items-center gap-2 rounded-sm text-[14px] font-semibold tracking-tight" aria-label="Underwatch home">
           <LogoMark size={22} />
-          <span>Kernel Witness</span>
+          <span>Underwatch</span>
         </Link>
         <nav aria-label="Landing" className="hidden items-center gap-6 text-[13px] text-text-secondary md:flex">
           <a href="#features" className="hover:text-text">Product</a>
@@ -139,13 +139,15 @@ function Hero() {
         <div className={`${wrap} relative flex flex-col items-center text-center`}>
           <h1
             id="landing-hero-title"
-            className="max-w-[920px] text-[34px] font-semibold leading-tight tracking-[-0.02em] sm:text-[44px] lg:text-[52px]"
+            className="text-[44px] font-semibold leading-none tracking-[-0.03em] sm:text-[56px] lg:text-[64px]"
           >
-            See what your agent is actually doing.
+            Underwatch
           </h1>
-          <p className="mt-5 max-w-[620px] text-[16px] leading-relaxed text-text-secondary sm:text-[18px]">
-            Independently track agent actions, investigate suspicious behavior, and verify that your code, credentials, and APIs
-            stay protected.
+          <p className="mt-5 max-w-[760px] text-[24px] leading-snug tracking-[-0.01em] sm:text-[30px] lg:text-[34px]">
+            Your AI agents work. Under our watch.
+          </p>
+          <p className="mt-4 max-w-[620px] text-[15px] leading-relaxed text-text-secondary sm:text-[17px]">
+            Independent observability and security for AI coding agents.
           </p>
         </div>
       </section>
@@ -284,7 +286,7 @@ function LandingFooter() {
       <div className={`${wrap} flex flex-col gap-4 py-8 text-[12px] text-text-tertiary sm:flex-row sm:items-center sm:justify-between`}>
         <div className="flex items-center gap-2">
           <LogoMark size={18} />
-          <span>Kernel Witness</span>
+          <span>Underwatch</span>
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
           <Link to="/overview" className="hover:text-text">Overview</Link>

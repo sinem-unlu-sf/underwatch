@@ -126,7 +126,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Search Kernel Witness"
+        aria-label="Search Underwatch"
         className="kw-fade-in relative flex max-h-[70vh] w-full max-w-[600px] flex-col overflow-hidden rounded-lg border border-line-strong bg-surface-2"
         style={{ boxShadow: "var(--shadow-overlay)" }}
       >

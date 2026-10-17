@@ -49,7 +49,7 @@ export function LoginPage() {
 
   return (
     <AuthLayout
-      title="Log in to Kernel Witness"
+      title="Log in to Underwatch"
       subtitle="Use the local account you created on this server."
       footer={
         <>

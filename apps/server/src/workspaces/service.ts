@@ -29,7 +29,7 @@ import { authorizeRules, checkRootIntact, isInside, readConfined, resolveClaudeM
 
 export const DEMO_WORKSPACE_DIRNAME = "demo-repo";
 const DEMO_LABEL = "Demo workspace (synthetic secrets)";
-/** Template files stored under another name so they do not affect the Kernel Witness repo itself. */
+/** Template files stored under another name so they do not affect the Underwatch repo itself. */
 const TEMPLATE_RENAMES: Record<string, string> = { _gitignore: ".gitignore" };
 
 const SNAPSHOT_SKIP = new Set([".git", "node_modules", "__pycache__", ".venv"]);
@@ -194,7 +194,7 @@ export function createWorkspaceService(ctx: ServerContext): WorkspaceService {
 
   function checkBlock(block: ManagedBlock): void {
     if (containsMarker(block.content)) {
-      throw new ApiHttpError("validation_error", "Safeguard content must not contain Kernel Witness block markers.");
+      throw new ApiHttpError("validation_error", "Safeguard content must not contain Underwatch block markers.");
     }
     if (block.content.trim().length === 0) throw new ApiHttpError("validation_error", "Safeguard content is empty.");
   }
@@ -276,9 +276,9 @@ export function createWorkspaceService(ctx: ServerContext): WorkspaceService {
         runGit(target, ["add", "-A"]);
         runGit(target, [
           "-c",
-          "user.name=Kernel Witness",
+          "user.name=Underwatch",
           "-c",
-          "user.email=demo@kernel-witness.invalid",
+          "user.email=demo@underwatch.invalid",
           "-c",
           "commit.gpgsign=false",
           "-c",

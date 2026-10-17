@@ -48,7 +48,7 @@ export const HealthResponse = z.object({
     excerpt: "OPEN .env",
 /** Query-string boolean: only the literal strings "true" / "false" are accepted. */
 export const SafeguardApprovalStatus = z.enum(["proposed", "approved", "rejected"]);
- * derived:  produced by Kernel Witness analysis (correlation, policy evaluation). Never raw evidence.
+ * derived:  produced by Underwatch analysis (correlation, policy evaluation). Never raw evidence.
   excerpt: z.string().nullable(),
 /** ai& Inference provider. Output must reference existing evidence IDs; it never changes finding status. */
   findings: "/api/findings",
@@ -164,7 +164,7 @@ export const ApiError = z.object({
   title: z.string().min(1),
 export type CoverageSourceEntry = z.infer<typeof CoverageSourceEntry>;
   PolicyVersion,
-  service: z.literal("kernel-witness-api"),
+  service: z.literal("underwatch-api"),
   /** Stable key native to the source; input to makeEventId. */
   source_sequence: z.number().int().nonnegative().nullable(),
   CoverageReport,

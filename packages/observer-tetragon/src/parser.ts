@@ -2,7 +2,7 @@ import { makeEventId, type Event, type EventType, type Outcome } from "@kw/schem
 import { redact } from "@kw/redaction";
 
 /**
- * Tetragon JSON export -> normalized Kernel Witness events.
+ * Tetragon JSON export -> normalized Underwatch events.
  *
  * Every event is basis "observed". @kw/schema's EventSource enum has no "tetragon" literal, so the schema-level
  * source is "kernel_tracer" and `observer: "tetragon"` names the concrete collector.
@@ -264,7 +264,7 @@ function draft(rec: J, t: string, ctx: ParseContext): Draft | null {
       verdict = `BLOCKED by ${base.policy_name} (EPERM)`;
     } else if (enforcing) {
       outcome = "failed";
-      limitations.push(`Action ${action} came from policy ${base.policy_name ?? "?"}, which is not a Kernel Witness enforcement policy.`);
+      limitations.push(`Action ${action} came from policy ${base.policy_name ?? "?"}, which is not a Underwatch enforcement policy.`);
       verdict = `failed (${action} by non-KW policy ${base.policy_name ?? "?"})`;
     } else if (ret === null) {
       outcome = "attempted";
@@ -302,7 +302,7 @@ function draft(rec: J, t: string, ctx: ParseContext): Draft | null {
       "Path is the dentry path relative to its mount root (for bind mounts it lacks the mount point prefix).",
       "Only renames/links of protected names are hooked (enforcement rename guard); other renames are not observed.",
     ];
-    if (!isBlocked && enforcing) limitations.push(`Action ${action} came from policy ${base.policy_name ?? "?"}, which is not a Kernel Witness enforcement policy.`);
+    if (!isBlocked && enforcing) limitations.push(`Action ${action} came from policy ${base.policy_name ?? "?"}, which is not a Underwatch enforcement policy.`);
     return {
       kw_type: kw,
       event_type: fn === "inode_rename" ? "file_rename" : "file_create",
@@ -337,7 +337,7 @@ function draft(rec: J, t: string, ctx: ParseContext): Draft | null {
     let outcome: Outcome = "attempted";
     if (enforcing) {
       outcome = "failed";
-      limitations.push(`Action ${action} by policy ${base.policy_name ?? "?"} (not a Kernel Witness file enforcement policy).`);
+      limitations.push(`Action ${action} by policy ${base.policy_name ?? "?"} (not a Underwatch file enforcement policy).`);
     }
     return {
       kw_type: "net.connect",

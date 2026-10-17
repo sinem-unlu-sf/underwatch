@@ -84,7 +84,7 @@ describe("ClaudeCodeAdapter", () => {
       mode: "broker",
       clientTokenEnv: OAUTH_TOKEN_ENV,
       baseUrlEnv: "ANTHROPIC_BASE_URL",
-      realTokenHostSource: "~/.kernel-witness/claude-oauth-token",
+      realTokenHostSource: "~/.underwatch/claude-oauth-token",
       realTokenDeliverTo: "llm-broker",
     });
     expect(Object.keys(c.env)).not.toContain(OAUTH_TOKEN_ENV);

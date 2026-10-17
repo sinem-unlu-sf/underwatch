@@ -76,10 +76,10 @@ export function adapterStatus(db?: Db): ComponentStatus {
     name: "Claude Code adapter",
     status: "configured",
     detail:
-      "@kw/adapter-claude-code parses stream-json and hook output of Claude Code runs that Kernel Witness starts itself " +
+      "@kw/adapter-claude-code parses stream-json and hook output of Claude Code runs that Underwatch starts itself " +
       "(Agent Runs > Start supervised run, and safeguard verification runs) in the Docker harness" +
       (n === null ? "." : `; ${n} live run(s) recorded.`) +
-      " Claude Code sessions you run outside Kernel Witness are not observed.",
+      " Claude Code sessions you run outside Underwatch are not observed.",
     configured_via: null,
   };
 }
@@ -87,7 +87,7 @@ export function adapterStatus(db?: Db): ComponentStatus {
 /** Observer sources actually wired in this build, and where. Everything else stays "not implemented". */
 const WIRED_COLLECTORS: Partial<Record<EventSource, string>> = {
   kernel_tracer:
-    "Tetragon (eBPF) in the kw-tetragon container. Attached to supervised runs (Agent Runs > Start supervised run) and safeguard verification runs, only when kw-tetragon is healthy (otherwise the run's coverage marks kernel observation unavailable, with the reason); not attached to sessions outside Kernel Witness.",
+    "Tetragon (eBPF) in the kw-tetragon container. Attached to supervised runs (Agent Runs > Start supervised run) and safeguard verification runs, only when kw-tetragon is healthy (otherwise the run's coverage marks kernel observation unavailable, with the reason); not attached to sessions outside Underwatch.",
   network_proxy:
     "Egress proxy (default-deny) and credential-broker logs, captured host-side in supervised and verification runs only.",
   git_observer: "Pre/post git snapshot of the disposable workspace copy, taken host-side in supervised runs only.",
@@ -239,7 +239,7 @@ export function settingsStatus({ db, dbLocation, env, inference }: StatusContext
         (activeLive
           ? ""
           : "No supervised run has recorded a policy version yet; the built-in policy below is used as soon as one runs. ") +
-        "Built-in policy: \"Kernel Witness supervised policy\" (kw-supervised), applied to every live supervised run: Claude Code managed settings (read-only, Read denied for .env and secrets/, .claude/ writes denied) plus the matching KW rules evaluated by @kw/analysis. Policy editing in the UI is not implemented; applied safeguards are not merged into supervised runs in this build (they apply to their verification runs).",
+        "Built-in policy: \"Underwatch supervised policy\" (kw-supervised), applied to every live supervised run: Claude Code managed settings (read-only, Read denied for .env and secrets/, .claude/ writes denied) plus the matching KW rules evaluated by @kw/analysis. Policy editing in the UI is not implemented; applied safeguards are not merged into supervised runs in this build (they apply to their verification runs).",
       configured_via: null,
       active_policy_version_id: (activeLive?.id as string | undefined) ?? null,
     },

@@ -1,4 +1,4 @@
-# Kernel Witness PRD: Ask Witness + Safeguard Generation
+# Underwatch PRD: Ask Witness + Safeguard Generation
 
 > Addendum A to [`PRD.md`](./PRD.md). Added 2026-10-17. Implementation notes, including how local `CLAUDE.md` access works, are in [`ASK-WITNESS.md`](./ASK-WITNESS.md).
 
@@ -6,14 +6,14 @@
 
 ### Product context
 
-Kernel Witness helps developers investigate AI coding-agent activity by connecting agent-reported actions with independently observed system events, applicable policies, findings, and safeguards.
+Underwatch helps developers investigate AI coding-agent activity by connecting agent-reported actions with independently observed system events, applicable policies, findings, and safeguards.
 
 This PRD adds two connected capabilities:
 
 1. **Ask Witness:** An interactive, evidence-grounded incident investigator that lets developers ask questions about a specific finding and understand what happened, what is known, and what remains uncertain.
 2. **Safeguard Generation:** A workflow that turns an investigated finding into a proposed `CLAUDE.md` update, permission rule, hook, or regression test, with user approval and verification.
 
-The features must work with the existing Kernel Witness application. Extend the current implementation instead of rebuilding it.
+The features must work with the existing Underwatch application. Extend the current implementation instead of rebuilding it.
 
 ### Core user value
 
@@ -183,7 +183,7 @@ It should include:
 - Clickable evidence references.
 - A way to proceed to safeguard generation.
 
-Keep the interface consistent with the existing Kernel Witness design system. Do not redesign unrelated pages.
+Keep the interface consistent with the existing Underwatch design system. Do not redesign unrelated pages.
 
 ---
 
@@ -384,7 +384,7 @@ Every record must retain its provenance and be linked to the correct project, ru
 - Do not expose internal prompts, credentials, or sensitive evidence in frontend error messages.
 - Handle API rate limits, timeouts, malformed output, and unavailable services gracefully.
 - Preserve the underlying evidence even when an investigation or AI request fails.
-- Make AI features optional; the rest of Kernel Witness must remain usable if ai& is unavailable.
+- Make AI features optional; the rest of Underwatch must remain usable if ai& is unavailable.
 
 ---
 
@@ -546,7 +546,7 @@ Use a clearly labeled synthetic incident until real independent event collection
 7. The application displays the exact proposed changes.
 8. The user reviews and approves a change in a disposable test project.
 9. A controlled test checks the restricted action and a legitimate operation.
-10. Kernel Witness records the observed results, links them to the safeguard and original finding, and displays whether verification passed, failed, or was inconclusive.
+10. Underwatch records the observed results, links them to the safeguard and original finding, and displays whether verification passed, failed, or was inconclusive.
 
 The demonstration must distinguish synthetic data from real observed events and must not claim a security control works without a successful test.
 

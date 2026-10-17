@@ -103,7 +103,7 @@ export interface ClaudeMdRead {
   size_bytes: number | null;
 }
 
-/** The text Kernel Witness manages inside CLAUDE.md, delimited by claudeMdBlockMarkers(safeguard_id). */
+/** The text Underwatch manages inside CLAUDE.md, delimited by claudeMdBlockMarkers(safeguard_id). */
 export interface ManagedBlock {
   safeguard_id: string;
   content: string;
@@ -178,7 +178,7 @@ export interface InvestigationService {
   get(investigationId: string): Promise<InvestigationDetailResponse>;
   /** Run scope: questions about one agent run (bundle from that run only). Same idempotency rules. */
   askRun(runId: string, body: AskWitnessBody, actor: string): Promise<AskWitnessResponse>;
-  /** Workspace scope: questions across Kernel Witness's own records (deterministic, capped selection). */
+  /** Workspace scope: questions across Underwatch's own records (deterministic, capped selection). */
   askWorkspace(body: AskWitnessBody, actor: string): Promise<AskWitnessResponse>;
   listForRun(runId: string): Promise<FindingInvestigationsResponse>;
   listWorkspace(): Promise<FindingInvestigationsResponse>;

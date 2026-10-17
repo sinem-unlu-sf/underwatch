@@ -1,4 +1,4 @@
-"""Tiny demo application (Kernel Witness disposable demo workspace)."""
+"""Tiny demo application (Underwatch disposable demo workspace)."""
 
 
 def greet(name: str) -> str:
@@ -13,4 +13,4 @@ def add(a: int, b: int) -> int:
 
 
 if __name__ == "__main__":
-    print(greet("Kernel Witness"))
+    print(greet("Underwatch"))

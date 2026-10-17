@@ -24,7 +24,7 @@ const answer = checkAskWitnessOutput(
     verified_facts: [
       { text: "A kernel observer saw the open() denied.", evidence_ids: ["evt_obs1", "evt_rep1"] },
       { text: "The agent says it tried to read .env.", evidence_ids: ["evt_rep1"] },
-      { text: "Kernel Witness flagged this as a policy violation.", evidence_ids: ["fnd_a"] },
+      { text: "Underwatch flagged this as a policy violation.", evidence_ids: ["fnd_a"] },
       { text: "The credentials were exfiltrated to a remote host.", evidence_ids: ["evt_made_up"] },
     ],
     hypotheses: [{ text: "The agent may have retried through another tool.", evidence_ids: [] }],
@@ -62,14 +62,14 @@ describe("Ask Witness answer rendering", () => {
     const observed = screen.getByRole("region", { name: "Backed by observed evidence" });
     expect(within(observed).getByText("A kernel observer saw the open() denied.")).toBeInTheDocument();
     expect(within(observed).queryByText("The agent says it tried to read .env.")).toBeNull();
-    expect(within(observed).getAllByTitle(/Assigned by Kernel Witness/)[0]).toHaveTextContent(EVIDENCE_SUPPORT_LABELS.observed_evidence);
+    expect(within(observed).getAllByTitle(/Assigned by Underwatch/)[0]).toHaveTextContent(EVIDENCE_SUPPORT_LABELS.observed_evidence);
 
     const reported = screen.getByRole("region", { name: "Supported only by agent-reported evidence" });
     expect(within(reported).getByText("The agent says it tried to read .env.")).toBeInTheDocument();
     expect(within(reported).getByText(EVIDENCE_SUPPORT_LABELS.reported_evidence_only)).toBeInTheDocument();
 
-    const derived = screen.getByRole("region", { name: "Supported only by Kernel Witness analysis" });
-    expect(within(derived).getByText("Kernel Witness flagged this as a policy violation.")).toBeInTheDocument();
+    const derived = screen.getByRole("region", { name: "Supported only by Underwatch analysis" });
+    expect(within(derived).getByText("Underwatch flagged this as a policy violation.")).toBeInTheDocument();
 
     // A "verified_fact" whose only citation is not in the bundle is shown as unsupported, never as fact.
     const unsupported = screen.getByRole("region", { name: /Unsupported claims/ });
@@ -148,7 +148,7 @@ describe("Ask Witness answer rendering", () => {
   it("renders app-side flags for action claims no record confirms", () => {
     const flagged = {
       ...answer,
-      action_claim_flags: [{ location: "summary" as const, claim: "verified" as const, text: "The safeguard has been verified.", reason: "No Kernel Witness record in the evidence sent shows a passed verification." }],
+      action_claim_flags: [{ location: "summary" as const, claim: "verified" as const, text: "The safeguard has been verified.", reason: "No Underwatch record in the evidence sent shows a passed verification." }],
     };
     render(<TurnView turn={turn({ answer: flagged, style: "simple", depth: "detailed" })} ev={{ index, onOpen: () => {} }} />);
     const region = screen.getByRole("region", { name: "Unconfirmed action claims" });

@@ -302,7 +302,7 @@ export function attributeAll(
       const { chain, broken, inferred } = ancestry(tree, o.pid);
       const agentIdx = chain.findIndex((p) => tree.agentRoots.has(p));
       if (chain.some((p) => tree.kwPids.has(p))) {
-        out.set(o.id, { ...base, chain, scope: "kw_instrumentation", toolUseId: null, state: "unmatched_observed", method: "identity", score: 0, lineageToAgent: agentIdx >= 0, note: "Kernel Witness instrumentation process" });
+        out.set(o.id, { ...base, chain, scope: "kw_instrumentation", toolUseId: null, state: "unmatched_observed", method: "identity", score: 0, lineageToAgent: agentIdx >= 0, note: "Underwatch instrumentation process" });
         continue;
       }
       if (agentIdx === 0) {

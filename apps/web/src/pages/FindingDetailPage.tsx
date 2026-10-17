@@ -415,14 +415,14 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
                 id="td-interpretation"
                 kind="derived"
                 title="Interpretation"
-                description="Kernel Witness analysis and AI answers. Derived or inferred from the records above; not raw evidence."
+                description="Underwatch analysis and AI answers. Derived or inferred from the records above; not raw evidence."
               >
                 <Panel title="Why it was flagged">
                   <p className="whitespace-pre-wrap text-fg-0">{f.description || <span className="text-fg-2">No description recorded.</span>}</p>
                 </Panel>
 
                 {derived.length > 0 ? (
-                  <Panel title="Derived by Kernel Witness (not raw evidence)" aside={<span className="text-[11px]">{derived.length} derived events</span>}>
+                  <Panel title="Derived by Underwatch (not raw evidence)" aside={<span className="text-[11px]">{derived.length} derived events</span>}>
                     <div className="space-y-1.5">
                       {derived.map((e) => (
                         <EventSummaryCard key={e.id} event={e} runId={run.id} />

@@ -1,6 +1,6 @@
 /**
  * Run-environment facts the engine needs but the @kw/schema Run does not carry (see "proposed schema additions").
- * Every field has a documented default. Defaults that encode Kernel Witness container conventions come from the
+ * Every field has a documented default. Defaults that encode Underwatch container conventions come from the
  * integrity-security design (one RW mount at /workspace, agent home /home/agent, uid 1000). Defaults that encode facts
  * about Claude Code itself are marked UNVERIFIED until exercised in the container.
  */
@@ -26,10 +26,10 @@ export interface AnalysisContext {
   agentPids: number[] | null;
   /** Process names that identify the agent runtime. UNVERIFIED: Claude Code's process shows as "claude" (npm global bin) or "node". */
   agentProcessNames: string[];
-  /** Kernel Witness instrumentation processes (hook binary). Their actions are scope kw_instrumentation. */
+  /** Underwatch instrumentation processes (hook binary). Their actions are scope kw_instrumentation. */
   kwProcessNames: string[];
   /**
-   * Exact command lines the agent runtime runs as Kernel Witness instrumentation (the registered hook command, e.g.
+   * Exact command lines the agent runtime runs as Underwatch instrumentation (the registered hook command, e.g.
    * "node /opt/kw/kw-hook.mjs"). A process is instrumentation only if its observed command line is EXACTLY one of
    * these (or `sh -c '<it>'`) AND its parent is the agent root or another instrumentation process, so a Bash tool
    * call running the same command is never reclassified. Empty = names only.

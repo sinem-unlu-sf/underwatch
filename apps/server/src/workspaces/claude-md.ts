@@ -6,9 +6,12 @@
 import { structuredPatch } from "diff";
 import { claudeMdBlockMarkers, mergeClaudeMdBlock, normalizeInstruction } from "@kw/schema";
 
-export const KW_SECTION_HEADING = "## Kernel Witness safeguards";
-const SECTION_RE = /^## Kernel Witness safeguards[ \t]*\r?$/m;
-const MARKER_PREFIX = "<!-- kernel-witness:safeguard ";
+export const KW_SECTION_HEADING = "## Underwatch safeguards";
+const SECTION_RE = /^## Underwatch safeguards[ \t]*\r?$/m;
+const MARKER_PREFIX = "<!-- underwatch:safeguard ";
+/** Pre-rename marker prefix; existing CLAUDE.md files may still contain it. */
+const LEGACY_MARKER_PREFIX = "<!-- kernel-witness:safeguard ";
+const hasMarker = (s: string) => s.includes(MARKER_PREFIX) || s.includes(LEGACY_MARKER_PREFIX);
 
 export interface Contradiction {
   line_number: number;
@@ -21,15 +24,15 @@ function blockText(safeguardId: string, content: string): string {
   return `${begin}\n${content.replace(/\r\n/g, "\n").trim()}\n${end}\n`;
 }
 
-/** True when the content would break block parsing (it must not contain Kernel Witness markers). */
+/** True when the content would break block parsing (it must not contain Underwatch markers). */
 export function containsMarker(content: string): boolean {
-  return content.includes(MARKER_PREFIX);
+  return hasMarker(content);
 }
 
 /**
  * Inserts (or replaces) this safeguard's managed block:
  * - an existing block for the same safeguard is replaced in place (re-version);
- * - else the block goes at the end of an existing "## Kernel Witness safeguards" section;
+ * - else the block goes at the end of an existing "## Underwatch safeguards" section;
  * - else that section is appended at the end of the file (after one blank line).
  */
 export function mergeManagedBlock(before: string | null, safeguardId: string, content: string): string {
@@ -69,7 +72,7 @@ function withoutOwnBlock(text: string, safeguardId: string): string {
 
 /**
  * Returns the existing line(s) that already state the instruction (normalized: case, whitespace and bullets ignored),
- * or null. Kernel Witness blocks of OTHER safeguards count as existing text.
+ * or null. Underwatch blocks of OTHER safeguards count as existing text.
  */
 export function findDuplicate(before: string | null, safeguardId: string, content: string): string | null {
   if (before === null) return null;
@@ -80,7 +83,7 @@ export function findDuplicate(before: string | null, safeguardId: string, conten
   const lines = text.split("\n");
   for (const line of lines) {
     const n = normalizeInstruction(line);
-    if (n.length > 0 && !line.includes(MARKER_PREFIX) && (n.includes(needle) || needle.startsWith(n))) return line.trim();
+    if (n.length > 0 && !hasMarker(line) && (n.includes(needle) || needle.startsWith(n))) return line.trim();
   }
   return "existing CLAUDE.md text (spread over several lines)";
 }
@@ -110,7 +113,7 @@ export function findContradictions(before: string | null, content: string): Cont
   const found: Contradiction[] = [];
   let inBlock = false;
   before.split("\n").forEach((line, i) => {
-    if (line.includes(MARKER_PREFIX)) {
+    if (hasMarker(line)) {
       inBlock = line.includes(" BEGIN -->");
       return;
     }
@@ -121,7 +124,7 @@ export function findContradictions(before: string | null, content: string): Cont
       found.push({
         line_number: i + 1,
         line: line.trim().slice(0, 500),
-        reason: `This existing line appears to allow "${hit}", which the new instruction restricts. Kernel Witness does not edit it; review it yourself.`,
+        reason: `This existing line appears to allow "${hit}", which the new instruction restricts. Underwatch does not edit it; review it yourself.`,
       });
     }
   });

@@ -1,10 +1,10 @@
-# Kernel Witness: Product Requirements Document (Judge Feedback)
+# Underwatch: Product Requirements Document (Judge Feedback)
 
 > Addendum C to [`PRD.md`](./PRD.md). Added 2026-10-17 from a hackathon judge review; recorded as received. Implementation notes are in [`JUDGE-FEEDBACK.md`](./JUDGE-FEEDBACK.md).
 
 ## 1. Product Vision
 
-Kernel Witness helps developers independently verify what AI coding agents actually do, investigate discrepancies between reported and observed behavior, and turn verified incidents into tested safeguards.
+Underwatch helps developers independently verify what AI coding agents actually do, investigate discrepancies between reported and observed behavior, and turn verified incidents into tested safeguards.
 
 The core principle is: **AI can explain the evidence, but it must not decide what happened.**
 
@@ -12,7 +12,7 @@ The product should help developers understand potential issues quickly, investig
 
 ## 2. Critical Requirement: Preserve All Existing Features
 
-This project extends and improves the existing Kernel Witness product. It is not a rebuild or a replacement.
+This project extends and improves the existing Underwatch product. It is not a rebuild or a replacement.
 
 Before making changes, inspect the existing repository and document all current features, routes, workflows, integrations, backend services, data models, monitoring mechanisms, and security controls.
 
@@ -117,7 +117,7 @@ Reuse existing AI integrations and investigation capabilities where possible. Do
 
 ### Problem
 
-The existing Neo4j graphs are a valuable part of Kernel Witness because they help developers understand relationships among events, agents, resources, and other relevant entities. However, developers should be able to discover and benefit from these relationships without having to navigate through extensive technical explanations first.
+The existing Neo4j graphs are a valuable part of Underwatch because they help developers understand relationships among events, agents, resources, and other relevant entities. However, developers should be able to discover and benefit from these relationships without having to navigate through extensive technical explanations first.
 
 ### Requirement
 
@@ -142,7 +142,7 @@ The purpose of this change is to improve access to an existing capability, not t
 
 ## 6. Findings and Investigation
 
-Kernel Witness must continue to help developers compare what an AI coding agent reported with what the system independently observed.
+Underwatch must continue to help developers compare what an AI coding agent reported with what the system independently observed.
 
 Each applicable investigation should preserve the distinction between:
 
@@ -177,7 +177,7 @@ Preserve existing filters, selection state, and investigation context wherever p
 
 ## 8. Safeguards and Remediation
 
-Kernel Witness should continue helping developers turn verified incidents into preventive measures.
+Underwatch should continue helping developers turn verified incidents into preventive measures.
 
 Preserve existing safeguard functionality, including applicable configuration changes, coding-agent instructions, permission rules, hooks, policy checks, regression tests, and verification workflows.
 
@@ -200,7 +200,7 @@ Preserve appropriate approval requirements for consequential changes.
 
 ## 9. Data Integrity, Privacy, and Security
 
-All new and existing functionality must respect Kernel Witness's security and data-handling requirements.
+All new and existing functionality must respect Underwatch's security and data-handling requirements.
 
 - Preserve authentication, authorization, and access controls.
 - Apply appropriate sensitive-data handling and redaction.
@@ -244,4 +244,4 @@ The changes are complete when:
 6. Existing features, integrations, routes, workflows, and security mechanisms are preserved.
 7. The new functionality has been tested, and remaining limitations are documented.
 
-**Final principle:** Make Kernel Witness faster to understand without making it less rigorous. Developers should be able to get the essential answer quickly, explore further when needed, and retain full access to the evidence and functionality that make the product trustworthy.
+**Final principle:** Make Underwatch faster to understand without making it less rigorous. Developers should be able to get the essential answer quickly, explore further when needed, and retain full access to the evidence and functionality that make the product trustworthy.

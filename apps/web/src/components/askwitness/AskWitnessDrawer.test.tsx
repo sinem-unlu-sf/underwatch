@@ -27,7 +27,7 @@ const answer = checkAskWitnessOutput(
     summary: "One credential read was blocked; one safeguard is verified.",
     verified_facts: [
       { text: "The kernel observer saw open(.env) denied.", evidence_ids: [EVT] },
-      { text: "Kernel Witness flagged a credential read attempt.", evidence_ids: ["fnd_one", "sg_one"] },
+      { text: "Underwatch flagged a credential read attempt.", evidence_ids: ["fnd_one", "sg_one"] },
     ],
     hypotheses: [],
     unknowns: [{ text: "Network telemetry was not captured." }],

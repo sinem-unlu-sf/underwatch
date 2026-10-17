@@ -10,7 +10,7 @@
  *     embedded DNS), the egress proxy IP and the credential broker IP; everything else, including the gateway, is
  *     rejected. The agent itself never holds NET_ADMIN (cap-drop ALL + no-new-privileges), so it cannot undo the rules.
  *  2. runs a self-test from inside the agent container (as the agent user): TCP connects to the gateway (known VM
- *     listeners + every Kernel Witness port) and the Docker Desktop host names must ALL fail, and the broker/proxy
+ *     listeners + every Underwatch port) and the Docker Desktop host names must ALL fail, and the broker/proxy
  *     must stay reachable (positive control). Any success refuses the run.
  *
  * What this establishes is limited to the probed targets at run start (recorded verbatim as evidence); it is not a
@@ -19,7 +19,7 @@
 
 export const NETGUARD_IMAGE = "kw-netguard:1";
 
-/** Kernel Witness host/VM ports (API, web, Neo4j, Tetragon metrics, daemon proxy) plus the 2 known gateway listeners. */
+/** Underwatch host/VM ports (API, web, Neo4j, Tetragon metrics, daemon proxy) plus the 2 known gateway listeners. */
 export const KW_PORTS = [4600, 4601, 7474, 7484, 7687, 7697, 2112, 29112, 3128] as const;
 export const GATEWAY_EXTRA_PORTS = [111, 57271, 22, 53, 80, 443, 2375, 2376, 8080, 8888] as const;
 export const DESKTOP_HOSTS = ["host.docker.internal", "gateway.docker.internal", "http.docker.internal"] as const;

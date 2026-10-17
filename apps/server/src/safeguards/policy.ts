@@ -64,8 +64,8 @@ export function writePolicyOverlay(
   const file = path.join(dir, `v${input.version}.json`);
   const body = `${JSON.stringify(
     {
-      kind: "kernel-witness.supervised-run-policy-overlay",
-      applies_to: "Kernel Witness supervised/verification runs only (merged into the read-only managed-settings.json per run)",
+      kind: "underwatch.supervised-run-policy-overlay",
+      applies_to: "Underwatch supervised/verification runs only (merged into the read-only managed-settings.json per run)",
       safeguard_id: input.safeguard_id,
       version_id: input.version_id,
       permissions: { deny: input.rules.deny, ask: input.rules.ask },

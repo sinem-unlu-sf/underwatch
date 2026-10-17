@@ -63,7 +63,7 @@ describe("Ask Witness answer modes (Addendum C)", () => {
     const { c, requests } = await setup(() => completion(modelAnswer()));
     const r1 = await ask(c, { question: "Why is this a problem?", client_request_id: "req-modes-0001" });
     expect(r1.status).toBe(200);
-    expect(r1.body.turn.prompt_version).toBe("kw.ask-witness@3");
+    expect(r1.body.turn.prompt_version).toBe("kw.ask-witness@4");
     expect(r1.body.turn).toMatchObject({ depth: "concise", style: "standard" });
     expect(system(requests[0]!)).toContain("Answer depth: CONCISE");
     expect(user(requests[0]!)).toContain("depth=concise, style=standard");
@@ -122,7 +122,7 @@ describe("Ask Witness answer modes (Addendum C)", () => {
       ["summary", "verified"],
       ["hypothesis", "applied"],
     ]);
-    expect(a.evidence_limitations.some((l: string) => /no Kernel Witness record in the evidence sent confirms it/.test(l))).toBe(true);
+    expect(a.evidence_limitations.some((l: string) => /no Underwatch record in the evidence sent confirms it/.test(l))).toBe(true);
     // proposals in next steps are never flagged; the citation check is unchanged
     expect(a.recommended_next_steps).toEqual(["Apply the safeguard, then run a verification to confirm it works."]);
     expect(a.evidence_check).toMatchObject({ cited: 0, invalid: 0 });

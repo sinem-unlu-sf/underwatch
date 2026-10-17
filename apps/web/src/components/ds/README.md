@@ -1,4 +1,4 @@
-# Kernel Witness design system
+# Underwatch design system
 
 Spec: `docs/UI-REDESIGN-PRD.md` (Linear meets Vercel). Tokens live in `src/styles.css`; components in this folder,
 exported from `components/ds/index.ts` (which also re-exports the restyled `ui.tsx` and `states.tsx` components).

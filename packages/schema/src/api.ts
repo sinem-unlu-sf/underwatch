@@ -284,7 +284,7 @@ export type VerificationRunListItem = z.infer<typeof VerificationRunListItem>;
 
 export const HealthResponse = z.object({
   status: z.enum(["ok", "degraded"]),
-  service: z.literal("kernel-witness-api"),
+  service: z.literal("underwatch-api"),
   /** Only with a valid bearer token: unauthenticated callers get a minimal liveness body (status, service, time). */
   version: z.string().optional(),
   time: Timestamp,

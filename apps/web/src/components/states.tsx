@@ -123,7 +123,7 @@ export function ErrorState({ error, what = "data" }: { error: unknown; what?: st
       <div role="alert" className="m-3 rounded-md border border-warn/50 bg-warn/8 p-3">
         <div className="flex items-center gap-1.5 font-semibold text-warn"><Icon name="alertCircle" size={14} />API not reachable</div>
         <p className="mt-1 text-fg-1">
-          Could not load {what}: the Kernel Witness API did not answer at <Cmd>127.0.0.1:4600</Cmd>. Start it with{" "}
+          Could not load {what}: the Underwatch API did not answer at <Cmd>127.0.0.1:4600</Cmd>. Start it with{" "}
           <Cmd>pnpm --filter @kw/server dev</Cmd> (or <Cmd>pnpm dev</Cmd> from the repo root to run API and UI together).
         </p>
         <p className="mt-1 font-mono text-[11px] text-fg-2">
@@ -224,7 +224,7 @@ export function PermissionDenied({ message }: { message?: string }) {
     <div role="alert" className="m-3 rounded-md border border-warn/50 bg-warn/8 p-3">
       <div className="flex items-center gap-1.5 font-semibold text-warn"><Icon name="alertCircle" size={14} />Permission denied</div>
       <p className="mt-1 text-fg-1">
-        The Kernel Witness API refused this request{hadToken ? " with the stored access token" : " because no access token was sent"}. Open the app
+        The Underwatch API refused this request{hadToken ? " with the stored access token" : " because no access token was sent"}. Open the app
         with the link the server prints at startup (run <Cmd>pnpm open</Cmd>, or copy the <Cmd>http://127.0.0.1:4601/overview?token=…</Cmd> link from the
         server log). The token is read once from the link, kept in this browser only, and removed from the address bar.
       </p>

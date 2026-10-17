@@ -1,5 +1,5 @@
 /**
- * Claude Code settings generator: Kernel Witness policy -> Claude Code settings JSON.
+ * Claude Code settings generator: Underwatch policy -> Claude Code settings JSON.
  *
  * Produces two documents from the same policy:
  *  - managed: for /etc/claude-code/managed-settings.json, bind-mounted READ-ONLY into the agent container
@@ -451,7 +451,7 @@ export function renderClaudeMdInstruction(input: {
     "",
     body,
     "",
-    `<!-- Added by Kernel Witness${origin} after developer approval (safeguard ${input.safeguard_id}). Guidance for the agent, not an enforced control. -->`,
+    `<!-- Added by Underwatch${origin} after developer approval (safeguard ${input.safeguard_id}). Guidance for the agent, not an enforced control. -->`,
     `<!-- ${MARK}:end id=${input.safeguard_id} -->`,
     "",
   ].join("\n");

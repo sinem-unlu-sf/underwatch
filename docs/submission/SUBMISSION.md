@@ -1,4 +1,4 @@
-# Kernel Witness: Tokyo Agent Hackathon submission
+# Underwatch: Tokyo Agent Hackathon submission
 
 > Status snapshot: 2026-10-17, about 11:45 JST. Several components were still being merged when this was written.
 > Each claim below carries one of three tags: **Built**, **Staged** (code and tests exist in the staging copy but are
@@ -7,7 +7,7 @@
 
 ## One-line pitch
 
-**Your coding agent tells you what it did. Kernel Witness shows you what the kernel saw, explains the gap with cited
+**Your coding agent tells you what it did. Underwatch shows you what the kernel saw, explains the gap with cited
 evidence, and turns the incident into a safeguard you can test.**
 
 ## Problem
@@ -23,7 +23,7 @@ Developers need to know:
   `Bash: cat .env`);
 - how to keep it from happening again, and proof that the fix works.
 
-## What Kernel Witness does
+## What Underwatch does
 
 1. **Supervises** a Claude Code run in a disposable, hardened Docker container.
 2. **Observes independently**, from outside the container. Tetragon (eBPF) records processes and file opens in the
@@ -127,7 +127,7 @@ Status: **Staged**, wiring in progress. **VERIFY BEFORE DEMO.**
 - **Citation validation.** The model must return structured JSON whose claims cite evidence IDs from the bundle.
   The server checks every citation and rejects or flags any that does not resolve. The UI renders citations as links
   to the evidence.
-- **Safeguard proposals.** ai& drafts the CLAUDE.md instruction, permission rule or regression test. Kernel Witness
+- **Safeguard proposals.** ai& drafts the CLAUDE.md instruction, permission rule or regression test. Underwatch
   attaches fixed, human-written "can / cannot enforce" text for each mechanism, so the model cannot overstate a
   safeguard. When ai& is unavailable, deterministic templates are used and labeled as such.
 - **What ai& decides: nothing about facts.** Whether an event happened, whether a policy was violated and whether a

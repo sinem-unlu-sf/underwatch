@@ -1,5 +1,5 @@
 #!/bin/sh
-# Kernel Witness agent entrypoint.
+# Underwatch agent entrypoint.
 # stdout carries ONLY Claude Code's stream-json; the HOST captures it (the
 # authoritative copy lives outside this container). Diagnostics go to stderr.
 # Never prints credentials.

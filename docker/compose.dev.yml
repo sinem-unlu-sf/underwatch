@@ -1,4 +1,4 @@
-# Kernel Witness local dev dependencies: Neo4j evidence graph (projection only; SQLite stays the system of record).
+# Underwatch local dev dependencies: Neo4j evidence graph (projection only; SQLite stays the system of record).
 #
 #   docker compose -f docker/compose.dev.yml up -d --wait
 #

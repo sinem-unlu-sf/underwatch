@@ -3,14 +3,14 @@ import { z } from "zod";
 /**
  * reported: emitted by or about the agent's own account of what it did (hooks, transcript, final message).
  * observed: captured by a collector independent of the agent's narrative.
- * derived:  produced by Kernel Witness analysis (correlation, policy evaluation). Never raw evidence.
+ * derived:  produced by Underwatch analysis (correlation, policy evaluation). Never raw evidence.
  */
 export const EventBasis = z.enum(["reported", "observed", "derived"]);
 export type EventBasis = z.infer<typeof EventBasis>;
 
 /**
  * Where an event came from. Agent-side sources carry basis "reported"; collector sources carry
- * basis "observed"; Kernel Witness analysis sources carry basis "derived" (see EVENT_SOURCE_BASIS).
+ * basis "observed"; Underwatch analysis sources carry basis "derived" (see EVENT_SOURCE_BASIS).
  * Which of these are actually implemented is decided after architecture review.
  */
 export const EventSource = z.enum([
@@ -52,8 +52,8 @@ export const EVENT_SOURCE_LABELS: Record<EventSource, string> = {
   network_proxy: "Network egress proxy",
   git_observer: "Repository diff observer",
   sandbox_runtime: "Sandbox runtime",
-  kw_correlator: "Kernel Witness correlator",
-  kw_policy_engine: "Kernel Witness policy engine",
+  kw_correlator: "Underwatch correlator",
+  kw_policy_engine: "Underwatch policy engine",
 };
 
 export const EventType = z.enum([

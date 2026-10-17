@@ -1,10 +1,10 @@
-# Kernel Witness PRD: User-Controlled Findings Update Modes
+# Underwatch PRD: User-Controlled Findings Update Modes
 
 > Addendum B to [`PRD.md`](./PRD.md). Added 2026-10-17. Implementation notes are in [`FINDINGS-MODES.md`](./FINDINGS-MODES.md).
 
 ## Objective
 
-Redesign how Kernel Witness displays and updates findings so users can choose when they want to receive and view information.
+Redesign how Underwatch displays and updates findings so users can choose when they want to receive and view information.
 
 We want the product to feel clean, minimal, deliberate, and user-controlled. Do not continuously populate the screen with new findings, notifications, metrics, activity cards, or other elements simply because data is available.
 
@@ -81,7 +81,7 @@ If the current architecture does not support these distinctions, identify the ga
 
 ## 3. UI design requirements
 
-Use the existing Kernel Witness visual direction: Linear-inspired simplicity and Vercel-inspired technical precision.
+Use the existing Underwatch visual direction: Linear-inspired simplicity and Vercel-inspired technical precision.
 
 The findings interface should have:
 

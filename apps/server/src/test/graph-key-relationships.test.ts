@@ -1,7 +1,7 @@
 /**
  * Addendum C section 5: key relationships for a finding. Built only from the graph response (Neo4j query results or
  * the relational fallback) plus stored KW records; never invents nodes; inferred links are labeled; Neo4j-down is
- * labeled "From Kernel Witness records, Neo4j unavailable". Existing graph response fields are unchanged.
+ * labeled "From Underwatch records, Neo4j unavailable". Existing graph response fields are unchanged.
  * Live tests: (1) a test-only run id projected then deleted; (2) READ-ONLY queries against the dev projection of the
  * real fx-04 fixture when it is present (no writes, no re-projection scheduling).
  */
@@ -67,7 +67,7 @@ describe("key relationships without Neo4j", () => {
       const kr = g.body.key_relationships!;
       expect(KeyRelationshipsSummary.safeParse(kr).success).toBe(true);
       expect(kr.source).toBe("relational");
-      expect(kr.detail).toMatch(/^From Kernel Witness records, Neo4j unavailable\./);
+      expect(kr.detail).toMatch(/^From Underwatch records, Neo4j unavailable\./);
       expect(kr.unavailable.join(" ")).toMatch(/origin_chain/);
       expect(kr.items.length).toBeGreaterThanOrEqual(3);
       expect(kr.items.every((i) => i.source === "kw_records")).toBe(true);
@@ -104,7 +104,7 @@ describe("key relationships without Neo4j", () => {
       const s = await getJson<KeyRelationshipsSummary>(ctx.app, `/api/findings/${findingId}/graph/summary`);
       expect(s.status).toBe(200);
       expect(s.body.source).toBe("relational");
-      expect(s.body.detail).toMatch(/^From Kernel Witness records, Neo4j unavailable\. Neo4j unavailable/);
+      expect(s.body.detail).toMatch(/^From Underwatch records, Neo4j unavailable\. Neo4j unavailable/);
       expect(JSON.stringify(s.body)).not.toContain("dead-graph-krel-password");
     } finally {
       await ctx.close();

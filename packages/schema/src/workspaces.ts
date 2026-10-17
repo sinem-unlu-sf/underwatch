@@ -84,7 +84,7 @@ export const FileDiffPreview = z.object({
   /** Set when an equivalent instruction already exists; the server then proposes no change (after === before). */
   duplicate_of: z.string().nullable(),
   /**
-   * Heuristic warnings: existing lines (outside Kernel Witness blocks) that appear to explicitly ALLOW what the new
+   * Heuristic warnings: existing lines (outside Underwatch blocks) that appear to explicitly ALLOW what the new
    * instruction restricts. Reported for the user to resolve; the server never edits or removes those lines.
    * Optional for compatibility (absent = not checked).
    */
@@ -102,7 +102,25 @@ export const MAX_CLAUDE_MD_BYTES = 256 * 1024;
  * is exact. Markers are HTML comments: invisible in rendered markdown, ignored by Claude Code as plain text.
  */
 export function claudeMdBlockMarkers(safeguardId: string): { begin: string; end: string } {
+  return { begin: `<!-- underwatch:safeguard ${safeguardId} BEGIN -->`, end: `<!-- underwatch:safeguard ${safeguardId} END -->` };
+}
+
+/** Markers written before the product was renamed to Underwatch; still recognized so existing blocks are replaced, not duplicated. */
+export function legacyClaudeMdBlockMarkers(safeguardId: string): { begin: string; end: string } {
   return { begin: `<!-- kernel-witness:safeguard ${safeguardId} BEGIN -->`, end: `<!-- kernel-witness:safeguard ${safeguardId} END -->` };
+}
+
+/** Any safeguard block marker, current or legacy. */
+export const ANY_CLAUDE_MD_MARKER_RE = /(?:underwatch|kernel-witness):safeguard/;
+
+/** Locates this safeguard's block under the current or the legacy markers. */
+function findClaudeMdBlock(text: string, safeguardId: string): { start: number; afterEnd: number } | null {
+  for (const { begin, end } of [claudeMdBlockMarkers(safeguardId), legacyClaudeMdBlockMarkers(safeguardId)]) {
+    const start = text.indexOf(begin);
+    const stop = start === -1 ? -1 : text.indexOf(end, start);
+    if (start !== -1 && stop !== -1) return { start, afterEnd: stop + end.length };
+  }
+  return null;
 }
 
 /** Normalizes instruction text for duplicate detection (case/whitespace/markdown bullets insensitive). */
@@ -126,12 +144,10 @@ export function mergeClaudeMdBlock(before: string | null, safeguardId: string, c
   const body = content.replace(/\r\n/g, "\n").trim();
   const block = `${begin}\n${body}\n${end}\n`;
   if (before === null || before.length === 0) return block;
-  const start = before.indexOf(begin);
-  const stop = start === -1 ? -1 : before.indexOf(end, start);
-  if (start !== -1 && stop !== -1) {
-    const afterEnd = stop + end.length;
-    const rest = before.slice(afterEnd).replace(/^\n/, "");
-    return before.slice(0, start) + block + rest;
+  const found = findClaudeMdBlock(before, safeguardId);
+  if (found) {
+    const rest = before.slice(found.afterEnd).replace(/^\n/, "");
+    return before.slice(0, found.start) + block + rest;
   }
   const base = before.endsWith("\n") ? before : `${before}\n`;
   return `${base}\n${block}`;
@@ -139,12 +155,10 @@ export function mergeClaudeMdBlock(before: string | null, safeguardId: string, c
 
 /** Removes this safeguard's block (used to preview rollback; actual rollback restores the stored before blob). */
 export function removeClaudeMdBlock(text: string, safeguardId: string): string {
-  const { begin, end } = claudeMdBlockMarkers(safeguardId);
-  const start = text.indexOf(begin);
-  const stop = start === -1 ? -1 : text.indexOf(end, start);
-  if (start === -1 || stop === -1) return text;
-  let head = text.slice(0, start);
-  const tail = text.slice(stop + end.length).replace(/^\n/, "");
+  const found = findClaudeMdBlock(text, safeguardId);
+  if (!found) return text;
+  let head = text.slice(0, found.start);
+  const tail = text.slice(found.afterEnd).replace(/^\n/, "");
   if (head.endsWith("\n\n")) head = head.slice(0, -1);
   return head + tail;
 }

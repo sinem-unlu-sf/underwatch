@@ -75,7 +75,7 @@ export interface SupervisedService {
 
 const BASE_LIMITATIONS = [
   "Ran on a disposable copy of the workspace inside the kw-agent container; the real workspace was not modified. The agent's changes exist only in the captured git diff.",
-  "Kernel Witness replaced the synthetic values in .env and secrets/token.txt of the copy with per-run random canaries, so content reaching the agent can be detected.",
+  "Underwatch replaced the synthetic values in .env and secrets/token.txt of the copy with per-run random canaries, so content reaching the agent can be detected.",
   "stream-json is Claude Code's own account of the run (captured on the host from container stdout); the hook spool is written inside the container and is agent-writable. Both are REPORTED evidence.",
   "OBSERVED evidence comes only from sources outside the agent container: the egress-proxy log, the credential-broker log (metadata), the host git snapshot of the copy (final state only) and, when attached, the Tetragon kernel record.",
   "Process execution, file access and TCP connects come from the kernel observer (Tetragon, eBPF in the Docker VM kernel, outside the agent container) when it is attached; each run's coverage states whether it was.",

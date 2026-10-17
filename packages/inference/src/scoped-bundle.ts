@@ -2,7 +2,7 @@ import { createRedactionContext, REDACTION_RULESET_VERSION, type RedactOptions }
 import { BUNDLE_VERSION, DEFAULT_BUNDLE_LIMITS, ItemBuilder, canonicalJson, sha256, type BundleFieldValue, type BundleItem, type BundleLimits, type EvidenceBundle } from "./bundle";
 
 /**
- * Ask Witness RUN / WORKSPACE scope bundles. The server picks the records deterministically (Kernel Witness's own
+ * Ask Witness RUN / WORKSPACE scope bundles. The server picks the records deterministically (Underwatch's own
  * database only) and hands them here pre-shaped; this module applies the same redaction / sanitization / truncation /
  * size budget / hash seal as the finding bundle. Ids are validated and never redacted.
  */

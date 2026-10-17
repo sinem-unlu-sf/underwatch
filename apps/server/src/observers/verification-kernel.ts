@@ -32,7 +32,7 @@ export function verificationPolicyVersion(p: { managedSha256: string; safeguardI
     is_fixture: false,
     policy_id: "kw-verification",
     version: `kw-verification@${sha.slice(0, 12)}`,
-    name: "Kernel Witness verification run policy",
+    name: "Underwatch verification run policy",
     description:
       `Policy for one safeguard verification run: Claude Code managed settings (base + scenario baseline${p.type === "permission_rule" ? " + the tested permission overlay" : ""}; sha256 ${p.managedSha256})` +
       (p.enforcePaths.length ? ` and a Tetragon deny-file-open policy for ${JSON.stringify([...p.enforcePaths].sort())} scoped to the run's agent container` : "") +

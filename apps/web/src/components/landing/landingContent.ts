@@ -15,7 +15,7 @@ export type LandingShot = { src: string; alt: string; caption: string; width: nu
 
 export const HERO_SHOT: LandingShot = {
   src: "/landing/hero-finding.webp",
-  alt: "Kernel Witness finding page: a protected .env file reached the agent via Bash despite policy rule R1, with a short read, the agent's report next to what the kernel saw, and the Neo4j evidence path.",
+  alt: "Underwatch finding page: a protected .env file reached the agent via Bash despite policy rule R1, with a short read, the agent's report next to what the kernel saw, and the Neo4j evidence path.",
   caption: "Real product screenshot: a live finding from a supervised Claude Code run (synthetic secret).",
   width: 1800,
   height: 1125,
@@ -28,7 +28,7 @@ export const FEATURES: Feature[] = [
     id: "observe",
     eyebrow: "Observe independently",
     title: "Evidence that does not come from the agent.",
-    body: "Kernel Witness records what actually happened while a coding agent works, from sources the agent cannot edit.",
+    body: "Underwatch records what actually happened while a coding agent works, from sources the agent cannot edit.",
     points: [
       "Cilium Tetragon kernel events: process exec, file open, network connect",
       "Egress proxy log for every outbound request",
@@ -64,11 +64,11 @@ export const FEATURES: Feature[] = [
     id: "investigate",
     eyebrow: "Investigate",
     title: "Follow the evidence graph. Ask questions in plain words.",
-    body: "Findings, events, files and rules live in a Neo4j evidence graph. Ask Witness answers from Kernel Witness records via ai& Inference, and every citation is checked against the records sent.",
+    body: "Findings, events, files and rules live in a Neo4j evidence graph. Ask Witness answers from Underwatch records via ai& Inference, and every citation is checked against the records sent.",
     points: [
       "Neo4j path from the finding to the exact kernel event",
       "Ask Witness: AI interprets, records establish the facts",
-      "Claim labels assigned by Kernel Witness, not by the model",
+      "Claim labels assigned by Underwatch, not by the model",
     ],
     shot: {
       src: "/landing/evidence-graph.webp",
@@ -82,7 +82,7 @@ export const FEATURES: Feature[] = [
     id: "safeguards",
     eyebrow: "Turn incidents into tested safeguards",
     title: "Fix it, then prove the fix works.",
-    body: "A finding becomes a proposed safeguard you review as a diff. Kernel Witness then re-runs the scenario and records whether the safeguard held.",
+    body: "A finding becomes a proposed safeguard you review as a diff. Underwatch then re-runs the scenario and records whether the safeguard held.",
     points: [
       "Kernel enforcement: verified for the tested scenario",
       "Claude Code permission rule: shown as bypassed when Bash got around it",

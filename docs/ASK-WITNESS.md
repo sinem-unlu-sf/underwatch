@@ -44,7 +44,7 @@ pnpm TypeScript monorepo (strict TypeScript, ESM, Zod 4). Node >= 22.13; `node:s
 
 - No authentication. The API binds 127.0.0.1 and had no origin checks on POST. The addendum adds an auth guard module (`src/auth/`): Origin allowlist plus the `x-kw-client` header on mutating routes, and an optional `KW_API_TOKEN` bearer mode.
 - No idempotency keys, no AI response storage, no safeguard versions or history, no blob store, no file access, no verification harness wiring. Migration `002_ask_witness.sql` and the module scaffold add these seams.
-- Verification needs Docker, the `kw-agent:2.1.302` image and a Claude OAuth token at `~/.kernel-witness/claude-oauth-token`. Without them, runs are recorded as **inconclusive** (cases "not exercised"), never as passed.
+- Verification needs Docker, the `kw-agent:2.1.302` image and a Claude OAuth token at `~/.underwatch/claude-oauth-token`. Without them, runs are recorded as **inconclusive** (cases "not exercised"), never as passed.
 - The native Claude Code sandbox cannot start inside the unprivileged Docker Desktop container (verified research). Permission rules there therefore do **not** stop interpreter subprocesses such as `python3 open('.env')`. This is stated in `MECHANISMS.permission_rule.cannot`.
 - Hook safeguards are not generated, applied or tested in this build, so they are shown as **unavailable**.
 
@@ -70,7 +70,7 @@ pnpm TypeScript monorepo (strict TypeScript, ESM, Zod 4). Node >= 22.13; `node:s
   2. **Origin**, when present, must be `http://127.0.0.1:4601` or `http://localhost:4601`. Anything else gets 403.
   3. **Mutating requests** (anything other than GET, HEAD or OPTIONS) also need `x-kw-client: kw-web`. Without it they get 403.
   4. Every route except `/api/health` needs `Authorization: Bearer <token>`. The check is constant-time over sha256 digests. A missing or wrong token gets 401 `unauthorized`. CORS preflight (OPTIONS) is answered without a token.
-- The server logs one local line at startup: `Open Kernel Witness: http://127.0.0.1:4601/overview?token=...`. Running `pnpm open` reads `data/auth-token` and passes the same URL to the OS opener (`open` on macOS) as an argument, with no shell. It never prints the token.
+- The server logs one local line at startup: `Open Underwatch: http://127.0.0.1:4601/overview?token=...`. Running `pnpm open` reads `data/auth-token` and passes the same URL to the OS opener (`open` on macOS) as an argument, with no shell. It never prints the token.
 - The web client reads `?token=` and sends the bearer header (owner: WEB).
 - Tests use `createTestApp()`. Its `app.inject` adds the token, an allowed Host and (for POST) the web headers. `ctx.rawInject` sends a request without them, for the 401 and 403 tests.
 
@@ -82,8 +82,8 @@ pnpm TypeScript monorepo (strict TypeScript, ESM, Zod 4). Node >= 22.13; `node:s
 - exist after `realpath`, which resolves symlinks before any check, so a symlink into `~/.ssh` is refused;
 - be a directory;
 - not be `/`, `$HOME`, or a parent of `$HOME`;
-- not be inside `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kernel-witness`, `~/Library`, `/System`, `/Library`, `/etc` (also `/private/etc`), `/usr`, `/bin`, `/sbin` or `/dev`;
-- not be inside `data/evidence`, not be Kernel Witness's `data/` directory (except `data/workspaces/`), and not contain `data/`;
+- not be inside `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.underwatch`, `~/Library`, `/System`, `/Library`, `/etc` (also `/private/etc`), `/usr`, `/bin`, `/sbin` or `/dev`;
+- not be inside `data/evidence`, not be Underwatch's `data/` directory (except `data/workspaces/`), and not contain `data/`;
 - contain a `.git` or an existing `CLAUDE.md`.
 
 Every rejection is a 400 with a plain-language reason. Authorizing the same realpath again returns the same workspace.
@@ -98,9 +98,9 @@ Workspaces whose directory disappears (or is swapped for a symlink) become `miss
   - A `CLAUDE.md` that is itself a symlink is refused.
   - Reads use `O_NOFOLLOW` and are capped at 256 KiB.
 - **Proposal** (`src/workspaces/claude-md.ts`).
-  - The instruction goes into a marked block (`<!-- kernel-witness:safeguard <id> BEGIN/END -->`).
+  - The instruction goes into a marked block (`<!-- underwatch:safeguard <id> BEGIN/END -->`).
     - If the block already exists, it is replaced in place.
-    - Otherwise the block goes at the end of an existing `## Kernel Witness safeguards` section.
+    - Otherwise the block goes at the end of an existing `## Underwatch safeguards` section.
     - If there is no such section, the section is appended after one blank line.
   - Everything else is preserved byte-for-byte, including CRLF and odd whitespace (covered by a test).
   - **Duplicates**: if the normalized text (ignoring case, whitespace and bullets) is already present, the proposal sets `duplicate_of`, makes `after === before`, and returns an empty diff.
@@ -132,13 +132,13 @@ Workspaces whose directory disappears (or is swapped for a symlink) become `miss
 
 ### 2.5 Why a deployed frontend alone could not edit local files
 
-A web page served from a remote origin runs in the browser sandbox. It cannot open `~/project/CLAUDE.md`, compute its hash or write it atomically. The File System Access API needs a per-file user gesture, exists only in Chromium, and gives no realpath or symlink checks. A remote backend has no route to the developer's disk at all. Kernel Witness therefore puts all file access in the **local backend** (127.0.0.1:4600, the same process that owns the evidence store). The UI, local or deployed, only asks for a diff and then sends an explicit approval that carries the hash it reviewed.
+A web page served from a remote origin runs in the browser sandbox. It cannot open `~/project/CLAUDE.md`, compute its hash or write it atomically. The File System Access API needs a per-file user gesture, exists only in Chromium, and gives no realpath or symlink checks. A remote backend has no route to the developer's disk at all. Underwatch therefore puts all file access in the **local backend** (127.0.0.1:4600, the same process that owns the evidence store). The UI, local or deployed, only asks for a diff and then sends an explicit approval that carries the hash it reviewed.
 
 Alternatives, if the UI were hosted remotely:
 
 1. Keep this local API and have the hosted UI call `http://127.0.0.1:4600`. The UI would then need CORS for that origin plus the bearer token. Today the Origin allowlist accepts only `127.0.0.1:4601` and `localhost:4601`.
 2. A small local companion CLI or daemon that pulls approved patches and applies them with the same compare-and-swap.
-3. **Patch export** (implemented): `GET /api/safeguards/:id/patch`, or "Copy patch" in the UI. The user applies it with `git apply`. Kernel Witness never claims that the file changed.
+3. **Patch export** (implemented): `GET /api/safeguards/:id/patch`, or "Copy patch" in the UI. The user applies it with `git apply`. Underwatch never claims that the file changed.
 4. A VCS round trip, such as a PR against the repository.
 
 Hackathon default: only the disposable demo workspace can be registered. Set `KW_ALLOW_USER_WORKSPACES=1` to allow your own folders. They then go through every check in 2.2.
@@ -152,7 +152,7 @@ Everything runs locally on the developer's Mac. Credentials stay in the server p
 | Local API token | `data/auth-token` (mode 600) | generated on first start | `pnpm open` opens `http://127.0.0.1:4601/overview?token=...` without printing the token. The server logs the same URL once at startup. |
 | ai& key | `AIAND_API_KEY` in the process env, else in `.env.local` at the repo root (`KW_ENV_FILE` to change the file) | none: Ask Witness records `ai_unavailable`; proposals use templates | Optional overrides: `AIAND_BASE_URL` (default `https://api.aiand.com/v1`, validated against `KW_AIAND_ALLOWED_HOSTS`; plain http only with `KW_ALLOW_INSECURE_AIAND_HTTP`), `AIAND_MODEL` (default `deepseek-ai/deepseek-v4-flash`), `AIAND_STRUCTURED_OUTPUT` (`json_schema`, `json_object` or `prompt_only`), `AIAND_TIMEOUT_MS`, `AIAND_REASONING_EFFORT`, `KW_INFERENCE_CACHE_DIR`. |
 | Neo4j | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, else the nearest `.env.neo4j` (`KW_NEO4J_ENV_FILE`) | not configured: the graph panel and retriever fall back to SQLite | Start it with `docker compose -f docker/compose.dev.yml up -d --wait` (container `kw-neo4j`, bolt on 7697). `KW_GRAPH=off` disables it. SQLite stays the system of record, and Neo4j is a rebuildable projection. |
-| Claude OAuth token (verification and supervised runs) | `~/.kernel-witness/claude-oauth-token` (`KW_CLAUDE_TOKEN_FILE`) | missing: runs are recorded as inconclusive or failed, never simulated | Mounted read-only into the per-run **credential broker** container only. The agent gets a per-run placeholder. |
+| Claude OAuth token (verification and supervised runs) | `~/.underwatch/claude-oauth-token` (`KW_CLAUDE_TOKEN_FILE`) | missing: runs are recorded as inconclusive or failed, never simulated | Mounted read-only into the per-run **credential broker** container only. The agent gets a per-run placeholder. |
 | Docker images | `kw-agent:2.1.302`, `kw-egress-proxy:1`, `kw-llm-broker:1` (`docker/`) | checked by `GET /api/verification/harness` | Kernel observer: the `kw-tetragon` container (`docker/tetragon/start.sh`), used by verification runs when healthy (`KW_KERNEL_OBSERVER`). |
 | Models for agent runs | `KW_VERIFY_MODEL`, `KW_SUPERVISED_MODEL` | `haiku` | Claude Code model alias inside the harness. |
 | Data | `KW_DATA_DIR` (`data/`), `KW_DB_PATH` (`data/kw.db`), `PORT` (4600) | | **Note:** `KW_DATA_DIR` does not move the database; set `KW_DB_PATH` too for an isolated instance. |
@@ -182,7 +182,7 @@ The flow follows Addendum A section 12. The incident is fixture **fx-03**: a syn
 6. Click **Create safeguard**. Up to five proposals appear: a CLAUDE.md instruction, a permission rule, a hook (shown as unavailable), kernel enforcement, and a regression test. Each one states what it can and cannot do.
 7. Open the **CLAUDE.md instruction**. Review the diff and click **Approve and write**, then confirm. The demo workspace's `CLAUDE.md` now has the marked block.
 8. Conflict path: click **Edit** and save a new wording. Then change `data/workspaces/demo-repo/CLAUDE.md` in an editor and click **Approve and write** again. The page shows **"CLAUDE.md changed since you reviewed the diff"** with the regenerated diff. Approve that diff; your manual line is kept.
-9. Open the **permission rule** and click **Approve**. It applies to Kernel Witness supervised and verification runs only, not to your own Claude Code settings.
+9. Open the **permission rule** and click **Approve**. It applies to Underwatch supervised and verification runs only, not to your own Claude Code settings.
 10. On each safeguard, click **Run verification**. The page polls until the result is **passed**, **failed** or **inconclusive**, and lists the cases, artifacts and limitations.
 
 ### 4.2 Recorded run of the demo via the API (2026-10-17, 11:48-12:02 JST, live dev server)

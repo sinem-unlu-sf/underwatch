@@ -109,7 +109,7 @@ const EXISTING_PANEL_HEADINGS = [
   "Why it was flagged",
   "Agent-reported events",
   "Independently observed events",
-  "Derived by Kernel Witness (not raw evidence)",
+  "Derived by Underwatch (not raw evidence)",
   "Recommended next step",
   `Evidence references (${fx04.evidence.length})`,
   "Missing information",
@@ -218,7 +218,7 @@ describe("Finding page: Quick Read (default)", () => {
       isPending: false,
       isError: false,
       error: null,
-      data: graphWith({ ...fx04Summary, source: "relational", detail: "From Kernel Witness records, Neo4j unavailable.", unavailable: ["process ancestry back to the tool call"] }),
+      data: graphWith({ ...fx04Summary, source: "relational", detail: "From Underwatch records, Neo4j unavailable.", unavailable: ["process ancestry back to the tool call"] }),
     };
     renderPage();
     expect(screen.getAllByText(/Neo4j unavailable/).length).toBeGreaterThan(0);

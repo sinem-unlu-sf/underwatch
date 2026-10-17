@@ -223,7 +223,7 @@ describe("POST /api/findings/:id/investigations", () => {
     expect(r2.body.turn.status).toBe("insufficient_evidence");
     expect(r2.body.turn.answer.insufficient_evidence).toBe(true);
     expect(r2.body.turn.answer.verified_facts).toEqual([]);
-    expect(r2.body.turn.answer.evidence_limitations.join(" ")).toMatch(/Kernel Witness marked this answer as insufficient/);
+    expect(r2.body.turn.answer.evidence_limitations.join(" ")).toMatch(/Underwatch marked this answer as insufficient/);
   });
 
   it("prompt injection in evidence and CLAUDE.md-like safeguard text is delimited and cannot change labels", async () => {

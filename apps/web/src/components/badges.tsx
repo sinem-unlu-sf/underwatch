@@ -140,7 +140,7 @@ const BASIS_TONE: Record<EventBasis, Tone> = { reported: "reported", observed: "
 const BASIS_TITLE: Record<EventBasis, string> = {
   reported: "Agent-reported: from the agent's own account (hooks, transcript, telemetry)",
   observed: "Independently observed: captured by a collector outside the agent's narrative",
-  derived: "Derived: produced by Kernel Witness analysis. Not raw evidence.",
+  derived: "Derived: produced by Underwatch analysis. Not raw evidence.",
 };
 export const BasisBadge = ({ basis }: { basis: EventBasis }) => (
   <Badge tone={BASIS_TONE[basis]} title={BASIS_TITLE[basis]}>

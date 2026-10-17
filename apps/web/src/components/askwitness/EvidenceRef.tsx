@@ -71,7 +71,7 @@ export function EvidenceRefDrawer({ id, evidenceRef, onClose }: { id: string; ev
             <KeyValue
               items={[
                 ["Kind", humanize(evidenceRef.kind)],
-                ["Basis", evidenceRef.basis ? <BasisBadge basis={evidenceRef.basis} /> : <span className="text-fg-2">derived (Kernel Witness analysis)</span>],
+                ["Basis", evidenceRef.basis ? <BasisBadge basis={evidenceRef.basis} /> : <span className="text-fg-2">derived (Underwatch analysis)</span>],
                 ["Source", evidenceRef.source ? <Mono>{evidenceRef.source}</Mono> : <span className="text-fg-2">—</span>],
                 ["Time", <Time iso={evidenceRef.timestamp} />],
                 ["Summary", <span className="text-fg-1">{evidenceRef.summary}</span>],

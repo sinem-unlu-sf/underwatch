@@ -10,7 +10,7 @@ import { Icon, type IconName } from "./Icon";
  *  - fixture:      hand-authored sample data, not a live capture.
  *  - reported:     from the agent's own account.
  *  - observed:     independently captured outside the agent's narrative.
- *  - derived:      produced by Kernel Witness analysis, not raw evidence.
+ *  - derived:      produced by Underwatch analysis, not raw evidence.
  *  - inferred:     model / heuristic interpretation; may be wrong.
  *  - policy:       relates to an explicit policy rule (violation or applicable rule).
  *  - risk:         meaningful security risk.
@@ -42,7 +42,7 @@ const SPEC: Record<StatusKind, { icon: IconName; cls: string; label: string; tit
   fixture: { icon: "file", cls: "border-fg-0 bg-fg-0 text-surface-0 font-mono tracking-wider", label: "FIXTURE", title: "Fixture data: hand-authored sample, not captured from a live agent run" },
   reported: { icon: "quote", cls: "border-reported/45 bg-reported/12 text-reported", label: "Reported", title: "Agent-reported: from the agent's own account" },
   observed: { icon: "eye", cls: "border-observed/45 bg-observed/12 text-observed", label: "Observed", title: "Independently observed outside the agent's narrative" },
-  derived: { icon: "derive", cls: "border-line-strong bg-surface-2 text-fg-1", label: "Derived", title: "Derived by Kernel Witness analysis. Not raw evidence." },
+  derived: { icon: "derive", cls: "border-line-strong bg-surface-2 text-fg-1", label: "Derived", title: "Derived by Underwatch analysis. Not raw evidence." },
   inferred: { icon: "inferred", cls: "border-dashed border-line-strong bg-transparent text-fg-1", label: "Inferred", title: "Interpretation, not evidence. May be wrong." },
   policy: { icon: "shield", cls: "border-accent/45 bg-accent/12 text-accent", label: "Policy", title: "Relates to an explicit policy rule" },
   risk: { icon: "alert", cls: "border-risk/50 bg-risk/12 text-risk", label: "Risk", title: "Meaningful security risk" },

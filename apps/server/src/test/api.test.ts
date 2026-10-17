@@ -37,7 +37,7 @@ describe("health and errors", () => {
   it("reports health", async () => {
     const { status, body } = await getJson(ctx.app, apiPaths.health());
     expect(status).toBe(200);
-    expect(body).toMatchObject({ status: "ok", service: "kernel-witness-api", database: { ok: true, driver: "node:sqlite" } });
+    expect(body).toMatchObject({ status: "ok", service: "underwatch-api", database: { ok: true, driver: "node:sqlite" } });
   });
 
   it("uses the ApiError shape for unknown routes, unknown ids, and bad input", async () => {
@@ -241,7 +241,7 @@ describe("run, event, finding, safeguard, evidence, settings endpoints", () => {
     expect(plain.body.neo4j).toMatchObject({ status: "not_configured", configured_via: null });
     expect(plain.body.policy.active_policy_version_id).toBe("pol_live_api");
     // 4a #12: Settings names the built-in supervised policy; kernel tracer text reflects attachment to supervised runs.
-    expect(plain.body.policy.detail).toMatch(/Kernel Witness supervised policy/);
+    expect(plain.body.policy.detail).toMatch(/Underwatch supervised policy/);
     expect(plain.body.policy.detail).not.toMatch(/no policy is active/);
     const kernel = plain.body.collectors.find((c) => c.id === "kernel_tracer")!;
     expect(kernel.detail).toMatch(/Attached to supervised runs/);

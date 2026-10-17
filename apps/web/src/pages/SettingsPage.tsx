@@ -141,10 +141,10 @@ function StatusSections({ s }: { s: SettingsStatusResponse }) {
               "Active version",
               s.policy.active_policy_version_id ? (
                 <span>
-                  <Mono>{s.policy.active_policy_version_id}</Mono> <span className="text-fg-2">(built-in Kernel Witness supervised policy)</span>
+                  <Mono>{s.policy.active_policy_version_id}</Mono> <span className="text-fg-2">(built-in Underwatch supervised policy)</span>
                 </span>
               ) : (
-                <span className="text-fg-2">Built-in Kernel Witness supervised policy (no version stored yet; it is recorded on the first live supervised run)</span>
+                <span className="text-fg-2">Built-in Underwatch supervised policy (no version stored yet; it is recorded on the first live supervised run)</span>
               ),
             ],
           ]}

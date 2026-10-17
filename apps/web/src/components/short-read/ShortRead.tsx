@@ -23,7 +23,7 @@ const FIX_PILL: Record<BriefActionStatus, StatusKind> = {
 const BASIS_LABEL: Record<ShortReadData["numbers"][number]["basis"], string> = {
   reported: "agent-reported",
   observed: "independently observed",
-  derived: "Kernel Witness analysis",
+  derived: "Underwatch analysis",
 };
 
 const TECH = /(\/[\w.-]+)+|\b(run|ver|sg|fnd|evt|ev)_[\w…]+/g;
@@ -144,7 +144,7 @@ function ShortReadView({
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-fg-2">
         <span className="label">Short read</span>
         {s.is_fixture ? <StatusPill kind="fixture" /> : null}
-        <span title="Built by Kernel Witness from stored records without AI">deterministic · no AI · {s.word_count} words</span>
+        <span title="Built by Underwatch from stored records without AI">deterministic · no AI · {s.word_count} words</span>
       </div>
 
       <p className="text-[15px] leading-snug font-semibold text-fg-0 break-words">{s.finding}</p>

@@ -260,7 +260,7 @@ describe("command palette", () => {
     renderShell("/overview");
     expect(calls.some((c) => c.startsWith("/api/findings"))).toBe(false); // nothing fetched until opened
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
+    const dialog = await screen.findByRole("dialog", { name: "Search Underwatch" });
     const input = within(dialog).getByRole("combobox");
     expect(input).toHaveFocus();
     await user.type(input, "credential");
@@ -268,7 +268,7 @@ describe("command palette", () => {
     expect(within(dialog).queryByRole("option", { name: /Unreported network call/ })).not.toBeInTheDocument();
     expect(calls).toContain("/api/findings?limit=500");
     await user.click(option);
-    expect(screen.queryByRole("dialog", { name: "Search Kernel Witness" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Search Underwatch" })).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/findings/fnd_cred");
   });
 
@@ -276,7 +276,7 @@ describe("command palette", () => {
     const user = userEvent.setup();
     renderShell("/overview");
     await user.click(screen.getByRole("button", { name: "Search" }));
-    const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
+    const dialog = await screen.findByRole("dialog", { name: "Search Underwatch" });
     await user.type(within(dialog).getByRole("combobox"), "refactor");
     await waitFor(() => expect(calls).toContain("/api/runs?q=refactor&limit=6"));
     await within(dialog).findByRole("option", { name: /Refactor auth module/ });
@@ -289,7 +289,7 @@ describe("command palette", () => {
     const user = userEvent.setup();
     renderShell("/overview");
     fireEvent.keyDown(window, { key: "k", metaKey: true });
-    const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
+    const dialog = await screen.findByRole("dialog", { name: "Search Underwatch" });
     const input = within(dialog).getByRole("combobox");
     await user.type(input, "deny .env");
     expect(await within(dialog).findByRole("option", { name: /Deny .env reads/ })).toBeInTheDocument();
@@ -297,7 +297,7 @@ describe("command palette", () => {
     await user.type(input, "zzzz-nothing");
     expect(await within(dialog).findByText(/No findings, runs, safeguards or pages match/)).toBeInTheDocument();
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Search Kernel Witness" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Search Underwatch" })).not.toBeInTheDocument();
   });
 });
 

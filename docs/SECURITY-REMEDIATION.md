@@ -1,8 +1,8 @@
-# Kernel Witness: security remediation report
+# Underwatch: security remediation report
 
 Date: 2026-10-17 (hackathon day). Scope: four issues, each fixed by an engineer, attacked by an independent adversarial reviewer, then repaired.
 
-This report does **not** claim that Kernel Witness is secure or production-ready. It records what was changed, what was tested and what the results were, and what is still open. Only synthetic canaries were used in tests and evidence (`sk-ant-oat01-KWCANARY-…`, `sk-KWCANARY-…`). The real Claude token was used for exactly three Docker smoke runs and never printed. The real ai& key was used for one live smoke, during the original Issue 2 fix. Nothing was committed to git.
+This report does **not** claim that Underwatch is secure or production-ready. It records what was changed, what was tested and what the results were, and what is still open. Only synthetic canaries were used in tests and evidence (`sk-ant-oat01-KWCANARY-…`, `sk-KWCANARY-…`). The real Claude token was used for exactly three Docker smoke runs and never printed. The real ai& key was used for one live smoke, during the original Issue 2 fix. Nothing was committed to git.
 
 Evidence paths are relative to the session scratchpad, `/private/tmp/claude-501/-Users-oguzkirmizi-Desktop-academics-hackathons-81agents/e12806d6-35d1-4210-8dab-a807163465a2/scratchpad/` (written as `$S` below).
 
@@ -17,7 +17,7 @@ Evidence paths are relative to the session scratchpad, `/private/tmp/claude-501/
   - `apps/server/src/verification/harness.ts` passed it in with `-e`.
 - **Why that exposed it:** the agent's Bash tool, hooks and child processes inherit the environment. Claude Code's own subprocess env scrubbing needs bubblewrap, which this container cannot run. So the token was readable through `env`, `/proc/*/environ`, child processes and host-side `docker inspect`.
 - **How it could leave:** through the egress proxy, which allowlisted `api.anthropic.com`, `platform.claude.com` and `claude.ai`.
-- **Latent regression path:** `packages/adapter-claude-code/src/adapter.ts` still declared `secretEnv: [{CLAUDE_CODE_OAUTH_TOKEN, ~/.kernel-witness/claude-oauth-token}]`.
+- **Latent regression path:** `packages/adapter-claude-code/src/adapter.ts` still declared `secretEnv: [{CLAUDE_CODE_OAUTH_TOKEN, ~/.underwatch/claude-oauth-token}]`.
 
 ### Changes
 - **New credential broker container** (`docker/llm-broker/`: `broker.mjs`, `Dockerfile`, tests). It has no dependencies, a read-only filesystem, all capabilities dropped, and runs as uid 1000.

@@ -1,4 +1,4 @@
-# Kernel Witness: UI Redesign and Implementation Prompt
+# Underwatch: UI Redesign and Implementation Prompt
 
 > **Superseded by [`UI-REDESIGN-PRD.md`](./UI-REDESIGN-PRD.md)**, the complete version the user sent minutes later. This draft is kept for history; its finding-level items (Quick Read, contextual chatbot, graph near the top) live on through Addendum C.
 >
@@ -6,11 +6,11 @@
 
 ## Objective
 
-Redesign the existing Kernel Witness application into a polished, futuristic, minimal, and intuitive developer tool.
+Redesign the existing Underwatch application into a polished, futuristic, minimal, and intuitive developer tool.
 
 Use the approved product PRD as the source of truth for product requirements. This prompt specifies the visual direction, information architecture, interaction design, and implementation expectations.
 
-The primary goal is to make Kernel Witness significantly easier to understand and navigate without sacrificing its technical depth, evidence integrity, or existing functionality.
+The primary goal is to make Underwatch significantly easier to understand and navigate without sacrificing its technical depth, evidence integrity, or existing functionality.
 
 **Before making any changes, inspect the entire existing repository. This is a redesign of the current product, not a rebuild. Preserve every existing feature, integration, workflow, route, backend connection, data model, authentication mechanism, permission, monitoring capability, and security control.**
 
@@ -397,4 +397,4 @@ The implementation is complete only when:
 9. The new and existing functionality has been tested.
 10. Any incomplete work or limitations are reported honestly.
 
-**Final instruction:** First understand what already exists. Then improve it. The goal is to make Kernel Witness easier to understand, more pleasant to use, and more efficient to navigate without sacrificing technical rigor, evidence integrity, security, or any existing capability.
+**Final instruction:** First understand what already exists. Then improve it. The goal is to make Underwatch easier to understand, more pleasant to use, and more efficient to navigate without sacrificing technical rigor, evidence integrity, security, or any existing capability.

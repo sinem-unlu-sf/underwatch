@@ -57,7 +57,7 @@ export type RelType = (typeof REL_TYPES)[number];
  *   proxy, git diff, ...).
  * - reported: transcribed from an agent-reported record (hook payload, transcript entry). The edge faithfully records
  *   what the agent CLAIMED, not that the claim is true.
- * - derived:  produced deterministically by Kernel Witness records or analysis (run config, correlation with
+ * - derived:  produced deterministically by Underwatch records or analysis (run config, correlation with
  *   match=matched and confidence=high, findings, safeguards, verification, recurrence, derived events).
  * - inferred: heuristic / not established (correlation that is uncertain or below high confidence, process
  *   attribution below high confidence, findings below high confidence).

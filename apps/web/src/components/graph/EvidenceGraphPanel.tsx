@@ -10,7 +10,7 @@ import { Mono, Panel } from "../ui";
 
 /**
  * Evidence graph for one finding (Neo4j projection, or the relational fallback when Neo4j is unavailable). Edge style
- * encodes HOW a link was established: observed = solid, reported (agent claim) = dashed purple, derived (Kernel Witness
+ * encodes HOW a link was established: observed = solid, reported (agent claim) = dashed purple, derived (Underwatch
  * records/analysis) = dashed grey, inferred (heuristic) = dotted amber, ai (Ask Witness citation) = dotted blue.
  * Nodes cited by the latest Ask Witness answer are ringed; a citation means "in the bundle the model saw", not "true".
  */
@@ -18,7 +18,7 @@ import { Mono, Panel } from "../ui";
 const BASIS_EDGE: Record<GraphBasis, { color: string; style: "solid" | "dashed" | "dotted"; label: string }> = {
   observed: { color: "#5cb8e6", style: "solid", label: "observed (independent observer)" },
   reported: { color: "#c6a0f0", style: "dashed", label: "reported (agent claim)" },
-  derived: { color: "#8e8c85", style: "dashed", label: "derived (Kernel Witness records / analysis)" },
+  derived: { color: "#8e8c85", style: "dashed", label: "derived (Underwatch records / analysis)" },
   inferred: { color: "#e3a740", style: "dotted", label: "inferred (heuristic, not established)" },
   ai: { color: "#7fc4ff", style: "dotted", label: "ai (Ask Witness citation, app-validated in bundle)" },
   user: { color: "#b6b3ab", style: "dashed", label: "user" },

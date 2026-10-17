@@ -28,7 +28,7 @@ const answer = checkAskWitnessOutput(
     summary: "One credential read was blocked; one safeguard is verified.",
     verified_facts: [
       { text: "The kernel observer saw open(.env) denied.", evidence_ids: [EVT] },
-      { text: "Kernel Witness flagged a credential read attempt.", evidence_ids: ["fnd_one", "sg_one"] },
+      { text: "Underwatch flagged a credential read attempt.", evidence_ids: ["fnd_one", "sg_one"] },
     ],
     hypotheses: [],
     unknowns: [{ text: "Network telemetry was not captured." }],
@@ -207,7 +207,7 @@ describe("AskWitnessPage", () => {
     expect(postBody(0)).toMatchObject({ question: "What needs my attention?" });
     expect(typeof postBody(0).client_request_id).toBe("string");
     expect(screen.getByTestId("location").textContent).toContain("inv=inv_ws1");
-    // Kernel Witness-assigned support labels stay visible next to the facts.
+    // Underwatch-assigned support labels stay visible next to the facts.
     expect(screen.getAllByText(/observed/i).length).toBeGreaterThan(0);
   });
 

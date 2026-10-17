@@ -94,7 +94,7 @@ function Breadcrumbs() {
   const crumbs = useBreadcrumbs();
   const current = crumbs[crumbs.length - 1]!;
   useEffect(() => {
-    document.title = `${current.label} · Kernel Witness`;
+    document.title = `${current.label} · Underwatch`;
   }, [current.label]);
   return (
     <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
@@ -317,7 +317,7 @@ export function SessionControl() {
             <p className="truncate font-mono text-[11.5px] text-fg-2" title={user.email}>
               {user.email}
             </p>
-            <p className="mt-1.5 text-fg-2">Local account on this Kernel Witness server.</p>
+            <p className="mt-1.5 text-fg-2">Local account on this Underwatch server.</p>
             {logoutError ? (
               <p role="alert" className="mt-2 text-[12px] text-danger">
                 {logoutError}
@@ -333,7 +333,7 @@ export function SessionControl() {
           <div>
             <div className="label mb-1">Local session</div>
             <p>
-              Kernel Witness runs on this machine; you are not signed in to a local account. {mode === "token"
+              Underwatch runs on this machine; you are not signed in to a local account. {mode === "token"
                 ? "The API requires the access token from the server's startup link or a signed-in account."
                 : mode === "local_loopback"
                   ? "The API accepts loopback requests from this machine."

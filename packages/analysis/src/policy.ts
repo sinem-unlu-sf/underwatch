@@ -5,7 +5,7 @@ import { globMatchPath, globMatchText } from "./glob";
 import { basename, lexicalNormalize, pathForms, type CanonicalPath } from "./paths";
 
 /**
- * Kernel Witness policy (JSON). Deny-first, order-independent decisions:
+ * Underwatch policy (JSON). Deny-first, order-independent decisions:
  *   explicit deny  >  explicit allow  >  explicit default  >  not covered.
  * An allow can never carve an exception out of a deny. Deny rules match if ANY path form (requested or resolved)
  * matches; allow rules only if ALL forms match (mirrors Claude Code's documented symlink semantics; doc-sourced,

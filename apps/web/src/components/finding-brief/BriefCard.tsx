@@ -62,7 +62,7 @@ export function BriefCard({
       aside={
         <span className="flex items-center gap-1.5 text-[11px]">
           {brief.is_fixture ? <Badge tone="warn">{brief.data_origin}</Badge> : null}
-          <span title="Built by Kernel Witness from stored records without AI">deterministic · no AI</span>
+          <span title="Built by Underwatch from stored records without AI">deterministic · no AI</span>
         </span>
       }
     >

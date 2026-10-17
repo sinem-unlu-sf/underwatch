@@ -41,12 +41,12 @@ describe("app routing", () => {
     renderAt("/");
     expect(screen.getByTestId("landing-page")).toBeInTheDocument();
     expect(screen.queryByTestId("app-shell")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1, name: "See what your agent is actually doing." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Underwatch" })).toBeInTheDocument();
     // First screen: only the headline and one sentence - no buttons, no screenshot.
     const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
     expect(within(hero).queryAllByRole("link")).toHaveLength(0);
     expect(within(hero).queryAllByRole("img")).toHaveLength(0);
-    expect(within(hero).getByText(/Independently track agent actions/)).toBeInTheDocument();
+    expect(within(hero).getByText("Your AI agents work. Under our watch.")).toBeInTheDocument();
     // The CTAs live in the section right below (revealed on scroll).
     const start = screen.getByRole("region", { name: "Get started" });
     expect(within(start).getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/signup");

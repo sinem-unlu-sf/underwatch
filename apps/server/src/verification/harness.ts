@@ -172,7 +172,7 @@ export async function checkHarness(tokenFile: string, agentKind: VerificationAge
     return checks;
   }
   const tokenOk = readClaudeToken(tokenFile) !== null;
-  checks.push({ id: "claude_token", ok: tokenOk, detail: tokenOk ? "Claude OAuth token file present" : "No usable Claude OAuth token at ~/.kernel-witness/claude-oauth-token (run `claude setup-token`)" });
+  checks.push({ id: "claude_token", ok: tokenOk, detail: tokenOk ? "Claude OAuth token file present" : "No usable Claude OAuth token at ~/.underwatch/claude-oauth-token (run `claude setup-token`)" });
   return checks;
 }
 

@@ -1,4 +1,4 @@
-# Kernel Witness LLM credential broker (TRUSTED zone). See broker.mjs.
+# Underwatch LLM credential broker (TRUSTED zone). See broker.mjs.
 # Same pinned base as docker/agent (node:22-bookworm-slim multi-arch index digest).
 # Contains NO credentials: the real Claude token and the per-run placeholder are
 # bind-mounted read-only at runtime into THIS container only (never into the agent).

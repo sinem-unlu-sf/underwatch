@@ -151,7 +151,7 @@ describe("CLAUDE.md read confinement", () => {
 describe("CLAUDE.md proposals", () => {
   const ORIGINAL = "# Project\r\n\r\nUse   tabs\tand   odd spacing.  \n- keep this\n\n## Testing\nrun tests\n"; // CRLF + odd whitespace on purpose
 
-  it("appends a Kernel Witness section and preserves unrelated content byte-for-byte", async () => {
+  it("appends a Underwatch section and preserves unrelated content byte-for-byte", async () => {
     const id = await authorize(mkProject("p", { "CLAUDE.md": ORIGINAL }));
     const p = await ws.proposeClaudeMdChange(id, "CLAUDE.md", BLOCK);
     expect(p.before).toBe(ORIGINAL);
@@ -163,7 +163,7 @@ describe("CLAUDE.md proposals", () => {
     expect(p.duplicate_of).toBeNull();
   });
 
-  it("inserts under an existing Kernel Witness section without touching what follows", () => {
+  it("inserts under an existing Underwatch section without touching what follows", () => {
     const before = `# P\n\n${KW_SECTION_HEADING}\n- existing safeguard\n\n## Other\nkeep\n`;
     const after = mergeManagedBlock(before, SG, "- new rule");
     const { begin, end } = claudeMdBlockMarkers(SG);

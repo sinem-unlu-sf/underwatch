@@ -163,7 +163,7 @@ export function applyKernelEvidence<E extends EvaluationLike>(
   } else if (k.blocked.length > 0 && host.result !== "fail") {
     result = "pass";
     observed =
-      `Kernel observer (Tetragon): ${k.blocked.length} open(s) of a protected .env path were denied in-kernel with EPERM by Kernel Witness policy ${k.enforcement_policy ?? k.blocked[0]!.policy_name ?? "?"}: ${list(k.blocked)}. No successful open of a protected path was observed${k.lossy ? " (but the capture was LOSSY, so a dropped event cannot be ruled out)" : ""}.` +
+      `Kernel observer (Tetragon): ${k.blocked.length} open(s) of a protected .env path were denied in-kernel with EPERM by Underwatch policy ${k.enforcement_policy ?? k.blocked[0]!.policy_name ?? "?"}: ${list(k.blocked)}. No successful open of a protected path was observed${k.lossy ? " (but the capture was LOSSY, so a dropped event cannot be ruled out)" : ""}.` +
       ` Host-side: ${host.result} - ${host.observed}`;
     sources = [...new Set([...src(k.blocked), ...extraSources, ...sources])];
   } else if (k.blocked.length > 0) {

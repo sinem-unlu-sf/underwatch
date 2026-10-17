@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -33,8 +34,15 @@ export function defaultServerPaths(env: NodeJS.ProcessEnv = process.env): Server
     blobsDir: path.join(dataDir, "evidence", "blobs"),
     demoTemplateDir: path.join(REPO_ROOT, "fixtures", "demo-repo-template"),
     dockerDir: path.join(REPO_ROOT, "docker"),
-    claudeTokenFile: env.KW_CLAUDE_TOKEN_FILE?.trim() || path.join(env.HOME ?? "", ".kernel-witness", "claude-oauth-token"),
+    claudeTokenFile: env.KW_CLAUDE_TOKEN_FILE?.trim() || defaultClaudeTokenFile(env.HOME ?? ""),
   };
+}
+
+/** ~/.underwatch/claude-oauth-token; falls back to the pre-rename ~/.kernel-witness/ location when only that exists. */
+function defaultClaudeTokenFile(home: string): string {
+  const current = path.join(home, ".underwatch", "claude-oauth-token");
+  const legacy = path.join(home, ".kernel-witness", "claude-oauth-token");
+  return !existsSync(current) && existsSync(legacy) ? legacy : current;
 }
 
 export const SERVICE_VERSION = "0.1.0";

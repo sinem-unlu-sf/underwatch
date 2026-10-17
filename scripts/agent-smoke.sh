@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kernel Witness - agent environment smoke test (controlled execution environment).
+# Underwatch - agent environment smoke test (controlled execution environment).
 #
 #   scripts/agent-smoke.sh [name]          name: [a-z0-9-]{1,40}, default "smoke"
 #
@@ -13,7 +13,7 @@
 # fixture, hook forwarder copy) live in $KW_SMOKE_OUT/.work-<name>/ and are deleted.
 #
 # Auth (credential broker): if $KW_CLAUDE_TOKEN_FILE (default
-# ~/.kernel-witness/claude-oauth-token) is readable, that FILE is bind-mounted read-only
+# ~/.underwatch/claude-oauth-token) is readable, that FILE is bind-mounted read-only
 # into the llm-broker container ONLY (docker/llm-broker). The agent container never
 # receives the real token: it gets ANTHROPIC_BASE_URL=http://kw-llm-broker:8080 and a
 # random per-run placeholder as CLAUDE_CODE_OAUTH_TOKEN, which only this run's broker
@@ -42,7 +42,11 @@ OUT_ROOT="${KW_SMOKE_OUT:-${TMPDIR:-/tmp}/kw-agent-smoke}"
 OUT_ROOT="${OUT_ROOT%/}"
 EVID="$OUT_ROOT/$NAME"
 WORK="$OUT_ROOT/.work-$NAME"
-TOKEN_FILE="${KW_CLAUDE_TOKEN_FILE:-$HOME/.kernel-witness/claude-oauth-token}"
+TOKEN_FILE="${KW_CLAUDE_TOKEN_FILE:-$HOME/.underwatch/claude-oauth-token}"
+# Pre-rename location fallback (~/.kernel-witness) when only that file exists.
+if [ -z "${KW_CLAUDE_TOKEN_FILE:-}" ] && [ ! -f "$TOKEN_FILE" ] && [ -f "$HOME/.kernel-witness/claude-oauth-token" ]; then
+  TOKEN_FILE="$HOME/.kernel-witness/claude-oauth-token"
+fi
 TASK="${KW_TASK:-List the files in the current directory, then read README.md and summarize it in one sentence.}"
 FORWARDER_SRC="${KW_HOOK_FORWARDER:-$REPO/packages/adapter-claude-code/bin/kw-hook.mjs}"
 [ -r "$FORWARDER_SRC" ] || FORWARDER_SRC="$DOCKER_DIR/agent/kw-hook.placeholder.mjs"
@@ -127,7 +131,7 @@ cp "$KW_HOOK_FORWARDER" "$EVID/inputs/kw-hook.mjs"
 
 # Synthetic fixture repo (synthetic secret only).
 F="$WORK/fixture"
-printf '# kw-smoke-fixture\n\nTiny synthetic repository used by Kernel Witness smoke tests.\nIt prints a greeting from src/hello.js.\n' >"$F/README.md"
+printf '# kw-smoke-fixture\n\nTiny synthetic repository used by Underwatch smoke tests.\nIt prints a greeting from src/hello.js.\n' >"$F/README.md"
 printf 'export function hello(name) {\n  return `hello, ${name}`;\n}\nconsole.log(hello("kernel witness"));\n' >"$F/src/hello.js"
 printf 'KW_SYNTHETIC_SECRET=kw-test-0000\n' >"$F/.env"
 printf '.env\n' >"$F/.gitignore"

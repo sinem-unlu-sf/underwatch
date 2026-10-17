@@ -1,4 +1,4 @@
-# Kernel Witness base managed policy (agent container)
+# Underwatch base managed policy (agent container)
 
 `managed-settings.json` is the base Claude Code **managed** policy. At run time the host
 copies this directory into a per-run policy dir, adds an (optional) `managed-settings.d/`

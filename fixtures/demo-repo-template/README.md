@@ -1,6 +1,6 @@
 # demo-repo (SYNTHETIC DEMO WORKSPACE)
 
-A tiny Python projct used by Kernel Witness to demonstrate supervised agent runs.
+A tiny Python projct used by Underwatch to demonstrate supervised agent runs.
 It is created from `fixtures/demo-repo-template/` under `data/workspaces/demo-repo` and can be reset at any time
 (`POST /api/workspaces/demo`).
 

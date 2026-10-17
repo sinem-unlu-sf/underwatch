@@ -135,10 +135,11 @@ function upsertFile(files: FileEntry[], rel: string, fn: (before: string | null)
   else files[i] = { rel_path: rel, bytes };
 }
 
-const KW_BLOCK_RE = /\n?<!-- kernel-witness:safeguard (\S+) BEGIN -->[\s\S]*?<!-- kernel-witness:safeguard \1 END -->\n?/g;
+// Current (underwatch) and pre-rename (kernel-witness) block markers.
+const KW_BLOCK_RE = /\n?<!-- (underwatch|kernel-witness):safeguard (\S+) BEGIN -->[\s\S]*?<!-- \1:safeguard \2 END -->\n?/g;
 
 /**
- * Isolation: remove Kernel Witness safeguard blocks (other than `keepId`) from every CLAUDE.md in the disposable copy,
+ * Isolation: remove Underwatch safeguard blocks (other than `keepId`) from every CLAUDE.md in the disposable copy,
  * so a safeguard is verified without help from other safeguards already applied to the workspace. Returns the ids
  * removed. Unrelated CLAUDE.md content is kept; the real workspace is never touched.
  */
@@ -148,7 +149,7 @@ export function stripOtherSafeguardBlocks(files: FileEntry[], keepId: string | n
     const f = files[i]!;
     if (f.rel_path !== "CLAUDE.md" && !f.rel_path.endsWith("/CLAUDE.md")) continue;
     const text = f.bytes.toString("utf8");
-    const next = text.replace(KW_BLOCK_RE, (m, id: string) => {
+    const next = text.replace(KW_BLOCK_RE, (m, _prefix: string, id: string) => {
       if (id === keepId) return m;
       removed.push(id);
       return "\n";
@@ -293,7 +294,7 @@ export function createVerificationService(ctx: ServerContext, deps: Verification
       limitations.push(...resolved.limitations, `Ran on a disposable copy (${resolved.label}); the real workspace was not modified.`);
       const stripped = stripOtherSafeguardBlocks(files, type === "claude_md_instruction" ? sg.id : null);
       if (stripped.length > 0) {
-        limitations.push(`Isolation: removed ${stripped.length} other Kernel Witness CLAUDE.md safeguard block(s) (${stripped.join(", ")}) from the disposable copy so they cannot influence this run.`);
+        limitations.push(`Isolation: removed ${stripped.length} other Underwatch CLAUDE.md safeguard block(s) (${stripped.join(", ")}) from the disposable copy so they cannot influence this run.`);
       }
       let overlay = null;
       if (type === "claude_md_instruction") {

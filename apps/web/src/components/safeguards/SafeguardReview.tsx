@@ -64,8 +64,8 @@ function SubSection({
 }
 
 const TARGET_TEXT: Record<"supervised_run_policy" | "scenario", string> = {
-  supervised_run_policy: "Kernel Witness verification runs and exported config only (not your repository or your own Claude Code settings)",
-  scenario: "Stored in Kernel Witness as a verification scenario (no file is changed)",
+  supervised_run_policy: "Underwatch verification runs and exported config only (not your repository or your own Claude Code settings)",
+  scenario: "Stored in Underwatch as a verification scenario (no file is changed)",
 };
 
 const APPLIED_TEXT: Record<SafeguardDetailResponse["lifecycle_status"], string> = {
@@ -101,7 +101,7 @@ function SafeguardFacts({ detail }: { detail: SafeguardDetailResponse }) {
           {m.kind === "instruction"
             ? "Guides the agent; cannot block an action."
             : m.availability.status === "unavailable"
-              ? "Shown as text; Kernel Witness cannot apply it in this build."
+              ? "Shown as text; Underwatch cannot apply it in this build."
               : m.can_enforce
                 ? "Can block matching actions once applied; only verification shows whether it does."
                 : "Re-runs the scenario to detect regressions; prevents nothing."}
@@ -150,9 +150,9 @@ function SafeguardFacts({ detail }: { detail: SafeguardDetailResponse }) {
         {v === null
           ? "Read-only legacy record: cannot be approved here."
           : v.target.kind === "workspace_file"
-            ? "You confirm an exact diff first. Kernel Witness writes only if the file hash still matches and keeps the previous content for rollback."
+            ? "You confirm an exact diff first. Underwatch writes only if the file hash still matches and keeps the previous content for rollback."
             : v.target.kind === "supervised_run_policy"
-              ? "You confirm first. The rule is recorded in Kernel Witness only."
+              ? "You confirm first. The rule is recorded in Underwatch only."
               : "You confirm first. Nothing is written to any file."}{" "}
         <span className="text-fg-2">Approval is not verification.</span>
       </span>,
@@ -372,7 +372,7 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
             />
             {v && v.target.kind !== "workspace_file" ? (
               <p className="mt-1.5 text-[11px] text-fg-2">
-                Target: {v.target.kind === "supervised_run_policy" ? "Kernel Witness verification runs and exported config only. In this build it does not change later supervised runs, your repository or your own Claude Code settings" : "stored in Kernel Witness as a verification scenario (nothing written)"}
+                Target: {v.target.kind === "supervised_run_policy" ? "Underwatch verification runs and exported config only. In this build it does not change later supervised runs, your repository or your own Claude Code settings" : "stored in Underwatch as a verification scenario (nothing written)"}
               </p>
             ) : null}
           </div>
@@ -402,7 +402,7 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
           {!workspaceReady ? (
             <div className="space-y-1.5 rounded-md border border-line bg-surface-1 p-3 text-[12px]">
               <div className="text-fg-1">
-                No authorized workspace is connected to this proposal, so Kernel Witness will not write any file. Copy the patch and apply it yourself, or
+                No authorized workspace is connected to this proposal, so Underwatch will not write any file. Copy the patch and apply it yourself, or
                 create the demo workspace in{" "}
                 <Link to="/settings" className="text-focus hover:underline">
                   Settings
@@ -519,18 +519,18 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
             <div className="font-medium text-fg-0">Confirm approval of version {v.version}</div>
             {isFileTarget && mode.preview && detail.workspace ? (
               <p className="text-[12px] text-fg-1">
-                Kernel Witness will write the change shown in the diff to <Mono className="text-fg-0">{`${detail.workspace.root_path}/${mode.preview.rel_path}`}</Mono> in
+                Underwatch will write the change shown in the diff to <Mono className="text-fg-0">{`${detail.workspace.root_path}/${mode.preview.rel_path}`}</Mono> in
                 workspace <span className="text-fg-0">{detail.workspace.label}</span> ({detail.workspace.kind}). It writes only if the file still has hash{" "}
                 <Mono>{mode.preview.before_sha256?.slice(0, 12) ?? "none (file absent)"}</Mono>; otherwise nothing is written and you will see a new diff. The
                 previous content is stored for rollback.
               </p>
             ) : v.target.kind === "supervised_run_policy" ? (
               <p className="text-[12px] text-fg-1">
-                The rule applies to Kernel Witness verification runs and exported config. In this build it is not merged into later supervised runs.
+                The rule applies to Underwatch verification runs and exported config. In this build it is not merged into later supervised runs.
                 Nothing in your repository or your own Claude Code settings changes.
               </p>
             ) : (
-              <p className="text-[12px] text-fg-1">The scenario is stored in Kernel Witness and linked to the finding. Nothing is written to any file.</p>
+              <p className="text-[12px] text-fg-1">The scenario is stored in Underwatch and linked to the finding. Nothing is written to any file.</p>
             )}
             <p className="text-[11px] text-fg-2">Approval does not mean the safeguard works. Only a passing verification run shows that, for the tested scenario.</p>
             <div className="flex gap-1.5">
@@ -553,7 +553,7 @@ export function SafeguardReview({ detail, onOpenEvidence }: { detail: SafeguardD
       </SubSection>
 
       {detail.file_changes.length > 0 ? (
-        <SubSection step="3" title="Applied file changes" description="Every write Kernel Witness made for this safeguard. Each can be rolled back if the file was not modified since.">
+        <SubSection step="3" title="Applied file changes" description="Every write Underwatch made for this safeguard. Each can be rolled back if the file was not modified since.">
           <ul className="space-y-1">
             {detail.file_changes.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-1.5 rounded-md border border-line bg-surface-2 px-2 py-1 text-[12px]">

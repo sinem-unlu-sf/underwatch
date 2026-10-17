@@ -54,7 +54,7 @@ describe("unconfirmed action claims", () => {
       ["hypothesis", "fixed"],
     ]);
     expect(flags[0]!.text).toBe("The safeguard has been verified and the regression test passed.");
-    expect(flags[0]!.reason).toMatch(/No Kernel Witness record/);
+    expect(flags[0]!.reason).toMatch(/No Underwatch record/);
   });
 
   it("does not flag negated, hedged or recommended statements, or policy facts that are not remediations", () => {

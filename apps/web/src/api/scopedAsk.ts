@@ -1,6 +1,6 @@
 /**
- * Ask Witness beyond one finding: RUN scope (one agent run) and WORKSPACE scope (all of Kernel Witness's own records).
- * Same Addendum A rules as the finding panel: the server retrieves a small, capped, redacted bundle from Kernel Witness's
+ * Ask Witness beyond one finding: RUN scope (one agent run) and WORKSPACE scope (all of Underwatch's own records).
+ * Same Addendum A rules as the finding panel: the server retrieves a small, capped, redacted bundle from Underwatch's
  * own database, validates every citation against it and labels claims by evidence basis; this client only renders the
  * validated turn. Parsing is deliberately lenient on the investigation envelope and on evidence-index kinds (scoped
  * bundles index runs, safeguards, verification results and digest entries too) but strict on the turn itself.

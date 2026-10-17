@@ -337,7 +337,7 @@ function FirstRunEmptyState() {
     <Section id="get-started" title="No runs recorded yet" description="Nothing has been observed, so there is nothing to review.">
       <div className="max-w-[80ch] space-y-3 rounded-md border border-line p-4 text-fg-1">
         <p>
-          A supervised run is created when Kernel Witness starts an agent task and records both what the agent reports and what independent
+          A supervised run is created when Underwatch starts an agent task and records both what the agent reports and what independent
           observers capture.
         </p>
         <ol className="list-inside list-decimal space-y-1.5">
@@ -346,7 +346,7 @@ function FirstRunEmptyState() {
             <Link to="/runs" className="text-fg-0 underline decoration-line-strong underline-offset-2 hover:decoration-fg-1">
               Agent Runs &gt; Start supervised run
             </Link>{" "}
-            (Docker harness; sessions run outside Kernel Witness are not observed).
+            (Docker harness; sessions run outside Underwatch are not observed).
           </li>
           <li>
             <span className="text-fg-0">Fixture runs</span> (hand-authored samples, badged FIXTURE everywhere) can be loaded to explore the UI:{" "}

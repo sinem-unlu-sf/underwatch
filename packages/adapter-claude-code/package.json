@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Kernel Witness Claude Code agent adapter (agent-REPORTED side): hook forwarder, settings generator, parsers for hook log / transcript / stream-json, headless command builder.",
+  "description": "Underwatch Claude Code agent adapter (agent-REPORTED side): hook forwarder, settings generator, parsers for hook log / transcript / stream-json, headless command builder.",
   "exports": {
     ".": "./src/index.ts"
   },

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Kernel Witness deterministic analysis engine: correlation, noise model, policy evaluation, discrepancy rules, rubrics. Pure: no I/O, no clock, no inference, no graph.",
+  "description": "Underwatch deterministic analysis engine: correlation, noise model, policy evaluation, discrepancy rules, rubrics. Pure: no I/O, no clock, no inference, no graph.",
   "exports": {
     ".": "./src/index.ts"
   },

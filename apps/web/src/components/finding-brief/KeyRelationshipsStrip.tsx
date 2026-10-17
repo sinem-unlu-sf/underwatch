@@ -23,7 +23,7 @@ const BASIS_TONE: Record<GraphBasis, Tone> = {
 const BASIS_TITLE: Record<GraphBasis, string> = {
   observed: "Every hop was independently observed",
   reported: "Rests on the agent's own report (a claim)",
-  derived: "Derived from Kernel Witness records / analysis",
+  derived: "Derived from Underwatch records / analysis",
   inferred: "At least one hop is heuristic: a lead to check, not proof",
   ai: "Ask Witness citation (in the bundle the model saw, not proof)",
   user: "Recorded by a user",
@@ -100,7 +100,7 @@ function RelationshipRow({ rel: r, onOpenEvidence, onOpenGraph }: { rel: KeyRela
           {r.basis}
         </Badge>
         <span className="text-[11px] text-fg-2">{humanize(r.kind)}</span>
-        {r.source === "kw_records" ? <Badge tone="muted">Kernel Witness records</Badge> : null}
+        {r.source === "kw_records" ? <Badge tone="muted">Underwatch records</Badge> : null}
       </div>
       <p className="mt-0.5 text-[12.5px] text-fg-0">{r.text}</p>
       {r.basis === "inferred" || r.basis === "reported" ? <p className="text-[11px] text-warn">{r.basis_note}</p> : null}

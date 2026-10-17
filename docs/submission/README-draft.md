@@ -1,9 +1,9 @@
-# Kernel Witness
+# Underwatch
 
 **Independent, kernel-level evidence of what your AI coding agent actually did, compared with what it says it did,
 turned into safeguards you can test.**
 
-Kernel Witness runs Claude Code in a disposable container and observes it from outside: Tetragon (eBPF) in the
+Underwatch runs Claude Code in a disposable container and observes it from outside: Tetragon (eBPF) in the
 kernel, plus a default-deny egress proxy. It puts the agent's reported actions next to the observed ones, flags the
 gaps, and lets you investigate them in a Neo4j evidence graph. **Ask Witness** (built on ai&) answers questions with
 cited evidence. You can then turn an incident into a safeguard (a CLAUDE.md instruction, a permission rule, or a
@@ -50,10 +50,10 @@ docker pull neo4j:community
 ### 3. Claude Code token for the supervised agent
 
 ```sh
-mkdir -p ~/.kernel-witness && chmod 700 ~/.kernel-witness
+mkdir -p ~/.underwatch && chmod 700 ~/.underwatch
 claude setup-token                       # copy the printed token
-pbpaste > ~/.kernel-witness/claude-oauth-token   # or paste it into the file in an editor
-chmod 600 ~/.kernel-witness/claude-oauth-token
+pbpaste > ~/.underwatch/claude-oauth-token   # or paste it into the file in an editor
+chmod 600 ~/.underwatch/claude-oauth-token
 ```
 
 The token is only ever read by the backend and passed to the agent's credential path. It is never written to the
@@ -86,7 +86,7 @@ In the UI, open **Settings → Workspaces** and click **Create demo workspace**.
 **synthetic** `.env` (`KW_SYNTHETIC_SECRET=kw-test-0000`) and a harmless task (fix the "projct" typo, then keep
 `python3 -m unittest` green). From a finding, use **Create safeguard → Approve → Run verification**.
 
-Kernel Witness writes only to `CLAUDE.md` files inside a workspace you explicitly authorize, and only after you
+Underwatch writes only to `CLAUDE.md` files inside a workspace you explicitly authorize, and only after you
 approve a visible diff.
 
 ## Architecture
@@ -152,7 +152,7 @@ flowchart LR
   a hash compare-and-swap, the before/after content is stored for rollback, and symlinks and `..` are refused.
 - **AI.** Evidence is redacted before it reaches ai&. Model output is schema-validated, and citations are checked
   against the evidence bundle. The model never decides facts or verification outcomes.
-- **Credentials.** The Claude token lives in `~/.kernel-witness/` (mode 600). The credential broker keeps the real
+- **Credentials.** The Claude token lives in `~/.underwatch/` (mode 600). The credential broker keeps the real
   token out of the agent container and gives the agent a per-run placeholder.
   <!-- VERIFY BEFORE PUBLISHING: broker wired into compose. Until then the token is in the agent's env; say so here. -->
 

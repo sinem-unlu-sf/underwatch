@@ -1,4 +1,4 @@
-// Kernel Witness design system. See ./README.md for tokens and usage rules.
+// Underwatch design system. See ./README.md for tokens and usage rules.
 export { Icon, type IconName } from "./Icon";
 export { Button, IconButton, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";
 export { SegmentedControl, type SegmentedOption } from "./SegmentedControl";

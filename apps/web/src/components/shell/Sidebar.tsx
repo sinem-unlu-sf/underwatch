@@ -163,7 +163,7 @@ function SidebarBody({ collapsed, footer, children }: { collapsed: boolean; foot
       <div className={`flex h-14 shrink-0 items-center gap-2.5 border-b border-line ${collapsed ? "justify-center px-0" : "px-4"}`}>
         <LogoMark />
         <div className={collapsed ? "sr-only" : "min-w-0 leading-tight"}>
-          <div className="truncate text-[13.5px] font-semibold tracking-tight text-fg-0">Kernel Witness</div>
+          <div className="truncate text-[13.5px] font-semibold tracking-tight text-fg-0">Underwatch</div>
           <div className="truncate text-[11px] text-fg-2">agent behavior verification</div>
         </div>
         {children}

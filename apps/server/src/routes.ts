@@ -48,7 +48,7 @@ export function registerRoutes(app: FastifyInstance, ctx: RouteContext): void {
     } catch (err) {
       database = { ok: false, driver: "node:sqlite", detail: `SQLite query failed: ${(err as Error).message}` };
     }
-    const minimal = { status: database.ok ? ("ok" as const) : ("degraded" as const), service: "kernel-witness-api" as const, time: new Date().toISOString() };
+    const minimal = { status: database.ok ? ("ok" as const) : ("degraded" as const), service: "underwatch-api" as const, time: new Date().toISOString() };
     // Without the token: liveness only (no version, driver or DB error text).
     const body: HealthResponse = authenticatedRequests.has(req) ? { ...minimal, version: SERVICE_VERSION, database } : minimal;
     return checkOutput(HealthResponse, body, v);

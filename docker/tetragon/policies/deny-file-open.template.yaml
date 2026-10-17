@@ -1,4 +1,4 @@
-# Kernel Witness - deny-file-open ENFORCEMENT template
+# Underwatch - deny-file-open ENFORCEMENT template
 #
 # Rendered by @kw/observer-tetragon applyEnforcement(); do not load directly.
 # BPF-LSM file_open hook + Override: the open() fails with EPERM before the file

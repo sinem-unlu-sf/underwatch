@@ -129,4 +129,4 @@ export type ContainerLayout = { -readonly [K in keyof typeof DEFAULT_CONTAINER_L
 /** Env var Claude Code reads for a `claude setup-token` long-lived token (authentication.md). */
 export const OAUTH_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN";
 /** Where the operator saves the token on the host (user-approved decision). Never read by this package. */
-export const DEFAULT_OAUTH_TOKEN_HOST_PATH = "~/.kernel-witness/claude-oauth-token";
+export const DEFAULT_OAUTH_TOKEN_HOST_PATH = "~/.underwatch/claude-oauth-token";

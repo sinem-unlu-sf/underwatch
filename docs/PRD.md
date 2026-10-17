@@ -1,4 +1,4 @@
-# Kernel Witness
+# Underwatch
 ## Product Requirements Document (PRD)
 
 **Product type:** AI coding-agent supervision and security tool  
@@ -16,9 +16,9 @@
 
 ## 1. Product Overview
 
-### 1.1 What is Kernel Witness?
+### 1.1 What is Underwatch?
 
-Kernel Witness is a developer tool that independently observes the actions of AI coding agents, compares observed behavior against the agent's own reported activity and applicable permissions, and helps developers investigate discrepancies.
+Underwatch is a developer tool that independently observes the actions of AI coding agents, compares observed behavior against the agent's own reported activity and applicable permissions, and helps developers investigate discrepancies.
 
 When an incident is verified, developers can turn it into a reusable safeguard and test whether that safeguard prevents the same problem from recurring.
 
@@ -33,7 +33,7 @@ A developer may struggle to determine:
 - Whether the agent's report accurately describes the observed activity.
 - How to prevent a verified incident from recurring.
 
-Kernel Witness aims to reduce the effort required to answer these questions.
+Underwatch aims to reduce the effort required to answer these questions.
 
 ### 1.3 Product Vision
 
@@ -117,7 +117,7 @@ The developer reruns a controlled scenario to check whether the safeguard preven
 ## 4. Core User Journey
 
 1. The developer starts a supervised coding-agent session.
-2. Kernel Witness records the session's available tool activity and independently observes supported system events.
+2. Underwatch records the session's available tool activity and independently observes supported system events.
 3. The developer provides or confirms the task context and applicable restrictions.
 4. The system correlates reported actions with observed events.
 5. Potential discrepancies appear in the run timeline.
@@ -614,7 +614,7 @@ Keep components modular. Avoid unnecessary microservices for the initial impleme
 
 ### 7.3 Execution Environment
 
-Prefer running the initial supervised agent in an isolated environment that Kernel Witness can observe and control.
+Prefer running the initial supervised agent in an isolated environment that Underwatch can observe and control.
 
 Document exactly which events are captured and which enforcement mechanisms are active.
 
@@ -743,7 +743,7 @@ The system should not assume that a graph database or append-only application de
 The product is not considered complete merely because its pages render.
 
 ### Session and event collection
-- [ ] A supported Claude Code session can be associated with a Kernel Witness run.
+- [ ] A supported Claude Code session can be associated with a Underwatch run.
 - [ ] Agent-reported events and independently observed events retain distinct provenance.
 - [ ] Supported events are normalized and persisted.
 - [ ] Duplicate ingestion does not create duplicate logical events.
@@ -871,7 +871,7 @@ The product should support a reproducible demonstration:
 2. Ask the agent to perform a legitimate coding task.
 3. Include a controlled scenario where the agent attempts a restricted action.
 4. Show the independent event and the corresponding permission outcome.
-5. Open the discrepancy in Kernel Witness.
+5. Open the discrepancy in Underwatch.
 6. Inspect the evidence and Neo4j relationships.
 7. Request an ai& explanation.
 8. Generate and approve a safeguard.

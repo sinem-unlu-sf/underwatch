@@ -1,4 +1,4 @@
-# Kernel Witness - observe-net (monitor only)
+# Underwatch - observe-net (monitor only)
 #
 # tcp_connect(sock) fires when the kernel sends the SYN (state TCP_SYN_SENT).
 # It establishes a connect ATTEMPT to daddr:dport; it does not establish that

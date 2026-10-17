@@ -28,7 +28,7 @@ function preview(before: string, beforeSha: string, workspaceId: string | null):
       .replace(/\n$/, "")
       .split("\n")
       .map((l) => ` ${l}`)
-      .join("\n")}\n+\n+<!-- kernel-witness:safeguard ${SG} BEGIN -->\n+${INSTRUCTION}\n+<!-- kernel-witness:safeguard ${SG} END -->\n`,
+      .join("\n")}\n+\n+<!-- underwatch:safeguard ${SG} BEGIN -->\n+${INSTRUCTION}\n+<!-- underwatch:safeguard ${SG} END -->\n`,
     duplicate_of: null,
     generated_at: T,
   };
