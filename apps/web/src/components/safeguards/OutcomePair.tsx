@@ -37,7 +37,7 @@ function OutcomeCard({
   testId: string;
 }) {
   return (
-    <div className="min-w-0 flex-1 basis-60 space-y-1 rounded-[3px] border border-line p-2" data-testid={testId}>
+    <div className="min-w-0 flex-1 basis-60 space-y-1 rounded-md border border-line p-2.5" data-testid={testId}>
       <div className="label">{title}</div>
       <div className="text-[11px] text-fg-2">{question}</div>
       <div className="flex flex-wrap items-center gap-1.5">

@@ -15,6 +15,9 @@ const INV_COLS = "id, scope_kind, scope_id, finding_id, run_id, status, created_
 const TURN_COLS =
   "id, investigation_id, client_request_id, request_fingerprint, question, evidence_ids, bundle_hash, model, prompt_version, status, answer, error, evidence_index, created_at";
 
+/** Addendum C: depth/style live in ai_meta.answer_mode (no new column); NULL for older turns. */
+const TURN_SELECT = `${TURN_COLS}, json_extract(ai_meta, '$.answer_mode.depth') AS answer_depth, json_extract(ai_meta, '$.answer_mode.style') AS answer_style`;
+
 function parseJson<T>(v: unknown, fallback: T): T {
   if (typeof v !== "string") return fallback;
   try {
@@ -53,6 +56,8 @@ function turnFromRow(r: Record<string, unknown>): TurnRecord {
     error: parseJson<InvestigationTurn["error"]>(r.error, null),
     evidence_index: parseJson<BundleEvidenceRef[]>(r.evidence_index, []),
     created_at: r.created_at as string,
+    ...(r.answer_depth === "concise" || r.answer_depth === "detailed" ? { depth: r.answer_depth } : {}),
+    ...(r.answer_style === "standard" || r.answer_style === "simple" ? { style: r.answer_style } : {}),
   };
 }
 
@@ -89,12 +94,12 @@ function listWhere(db: Db, where: string, params: unknown[]): InvestigationSumma
 }
 
 export function getTurnByRequestId(db: Db, clientRequestId: string): TurnRecord | null {
-  const row = stmt(db, `SELECT ${TURN_COLS} FROM investigation_turns WHERE client_request_id = ?`).get(clientRequestId);
+  const row = stmt(db, `SELECT ${TURN_SELECT} FROM investigation_turns WHERE client_request_id = ?`).get(clientRequestId);
   return row ? turnFromRow(row) : null;
 }
 
 export function listTurns(db: Db, investigationId: string): TurnRecord[] {
-  return stmt(db, `SELECT ${TURN_COLS} FROM investigation_turns WHERE investigation_id = ? ORDER BY seq`)
+  return stmt(db, `SELECT ${TURN_SELECT} FROM investigation_turns WHERE investigation_id = ? ORDER BY seq`)
     .all(investigationId)
     .map(turnFromRow);
 }

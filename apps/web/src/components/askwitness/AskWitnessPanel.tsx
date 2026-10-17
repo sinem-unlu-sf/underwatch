@@ -1,13 +1,19 @@
-import { ASK_WITNESS_SUGGESTED_QUESTIONS, type BundleEvidenceRef, type Severity } from "@kw/schema";
+import { ASK_WITNESS_INVESTIGATOR_QUESTIONS, ASK_WITNESS_SUGGESTED_QUESTIONS, type BundleEvidenceRef, type Severity } from "@kw/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiRequestError, api, newClientRequestId } from "../../api/client";
 import { queryKeys, useFindingInvestigations, useInvestigation } from "../../api/queries";
 import { FixtureBadge, SeverityBadge } from "../badges";
 import { ErrorState, MutationError, SkeletonBlock } from "../states";
 import { Panel } from "../ui";
-import { TurnView, type EvidenceLookup } from "./AnswerView";
+import { TurnView, type EvidenceLookup, type FollowUpMode } from "./AnswerView";
 import { EvidenceRefDrawer } from "./EvidenceRef";
+
+/** Addendum C: two of the judge's questions imply a mode (plain language / more depth); the rest are concise. */
+export const SUGGESTION_MODE: Readonly<Record<string, FollowUpMode>> = {
+  "Can you explain this in simpler terms?": { style: "simple" },
+  "What additional technical details should I know?": { depth: "detailed" },
+};
 
 export interface AskWitnessFinding {
   id: string;
@@ -20,6 +26,8 @@ interface Pending {
   question: string;
   clientRequestId: string;
   investigationId: string | null;
+  /** Addendum C: omitted = concise / standard. */
+  mode?: FollowUpMode;
 }
 
 /**
@@ -27,7 +35,22 @@ interface Pending {
  * finding only. Every question carries a client_request_id; a network-level retry reuses it, so the server returns the
  * stored turn instead of recording a duplicate.
  */
-export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWitnessFinding; onCreateSafeguard: (investigationId: string | null) => void }) {
+export function AskWitnessPanel({
+  finding,
+  onCreateSafeguard,
+  compact = false,
+  embedded = false,
+  maxSuggestions,
+}: {
+  finding: AskWitnessFinding;
+  onCreateSafeguard: (investigationId: string | null) => void;
+  /** Addendum C summary view: show only the input + suggested questions until the user asks or opens the history. */
+  compact?: boolean;
+  /** Inside the "Ask about this issue" side panel: no card chrome (the side panel supplies the heading). */
+  embedded?: boolean;
+  /** Show only the first N suggested questions; the rest move under "More questions". */
+  maxSuggestions?: number;
+}) {
   const qc = useQueryClient();
   const list = useFindingInvestigations(finding.id);
   const [selected, setSelected] = useState<string | null | "new">(null);
@@ -39,6 +62,7 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
   const detail = useInvestigation(investigationId);
 
   const [input, setInput] = useState("");
+  const [expanded, setExpanded] = useState(!compact);
   const [pending, setPending] = useState<Pending | null>(null);
   const [extraIndex, setExtraIndex] = useState<BundleEvidenceRef[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -46,7 +70,13 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
 
   const ask = useMutation({
     mutationFn: (p: Pending) =>
-      api.askWitness(finding.id, { question: p.question, client_request_id: p.clientRequestId, ...(p.investigationId ? { investigation_id: p.investigationId } : {}) }),
+      api.askWitness(finding.id, {
+        question: p.question,
+        client_request_id: p.clientRequestId,
+        ...(p.investigationId ? { investigation_id: p.investigationId } : {}),
+        ...(p.mode?.depth && p.mode.depth !== "concise" ? { depth: p.mode.depth } : {}),
+        ...(p.mode?.style && p.mode.style !== "standard" ? { style: p.mode.style } : {}),
+      }),
     onSuccess: async (res) => {
       setExtraIndex(res.evidence_index);
       setSelected(res.investigation.id);
@@ -58,12 +88,13 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
     },
   });
 
-  const submit = (question: string) => {
+  const submit = (question: string, mode?: FollowUpMode) => {
     const q = question.trim();
     if (!q || ask.isPending) return;
-    const p: Pending = { question: q, clientRequestId: newClientRequestId(), investigationId };
+    const p: Pending = { question: q, clientRequestId: newClientRequestId(), investigationId, ...(mode ? { mode } : {}) };
     setPending(p);
     setInput("");
+    setExpanded(true);
     ask.mutate(p);
   };
 
@@ -90,32 +121,50 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
   }, [detail.data, extraIndex]);
   const ev: EvidenceLookup = { index, onOpen: setOpenId };
 
+  // Scroll to the newest turn only after the user asked something on this page; a stored (pre-warmed) answer must not
+  // pull the finding page down on load.
+  const askedHere = useRef(false);
   useEffect(() => {
+    if (pending) askedHere.current = true;
+    if (!askedHere.current) return;
     endRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [turns.length, pending]);
 
   const ai = detail.data?.ai;
   const items = list.data?.items ?? [];
+  const limit = maxSuggestions ?? ASK_WITNESS_SUGGESTED_QUESTIONS.length;
+  const shownSuggestions = ASK_WITNESS_SUGGESTED_QUESTIONS.slice(0, limit);
+  const moreSuggestions = ASK_WITNESS_SUGGESTED_QUESTIONS.slice(limit);
 
-  return (
-    <Panel
-      id="ask-witness"
-      title="Ask Witness"
-      aside={
-        <>
-          <span className="text-[11px]">ai& · advisory</span>
-          <button type="button" className="btn" onClick={() => onCreateSafeguard(investigationId)}>
-            Create safeguard
-          </button>
-        </>
-      }
-    >
+  const asideContent = (
+    <>
+      <span className="text-[11px]">ai& · advisory</span>
+      <button type="button" className="btn" onClick={() => onCreateSafeguard(investigationId)}>
+        Create safeguard
+      </button>
+    </>
+  );
+  // A plain function (not a component) so the subtree keeps its identity across renders (input focus survives typing).
+  const wrap = (children: ReactNode) =>
+    embedded ? (
+      <div className="flex flex-col">
+        <div className="mb-2 flex flex-wrap items-center justify-end gap-2 text-fg-2">{asideContent}</div>
+        {children}
+      </div>
+    ) : (
+      <Panel id="ask-witness" title="Ask Witness" aside={asideContent}>
+        {children}
+      </Panel>
+    );
+
+  return wrap(
+    <>
       <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
         <span className="label">Investigating</span>
         <FixtureBadge isFixture={finding.is_fixture} compact />
         <span className="font-medium text-fg-0">{finding.title}</span>
         <SeverityBadge severity={finding.severity} />
-        {items.length > 0 ? (
+        {items.length > 0 && expanded ? (
           <span className="ml-auto flex items-center gap-1.5">
             <select
               aria-label="Investigation"
@@ -143,7 +192,19 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      {!expanded ? (
+        <p className="text-[12px] text-fg-2">
+          {items.length > 0
+            ? `${items.length} earlier investigation${items.length === 1 ? "" : "s"} on this finding. `
+            : "No questions asked about this finding yet. "}
+          {items.length > 0 ? (
+            <button type="button" className="text-focus hover:underline" onClick={() => setExpanded(true)}>
+              Show previous answers
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+      <div className={`flex flex-col gap-3 ${expanded ? "" : "hidden"}`}>
         {list.isPending ? (
           <SkeletonBlock lines={3} />
         ) : list.isError ? (
@@ -162,6 +223,7 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
             turn={t}
             ev={ev}
             onRetry={submit}
+            onFollowUp={submit}
             retrying={ask.isPending}
             onCreateSafeguard={() => onCreateSafeguard(investigationId)}
           />
@@ -206,18 +268,52 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
 
       <div className="mt-3 border-t border-line pt-3">
         <div className="mb-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggested questions">
-          {ASK_WITNESS_SUGGESTED_QUESTIONS.map((q) => (
+          {shownSuggestions.map((q) => (
             <button
               key={q}
               type="button"
               className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
               disabled={ask.isPending}
-              onClick={() => submit(q)}
+              onClick={() => submit(q, SUGGESTION_MODE[q])}
             >
               {q}
             </button>
           ))}
         </div>
+        <details className="mb-1.5">
+          <summary className="cursor-pointer text-[11px] text-fg-2">
+            {moreSuggestions.length > 0 ? `More questions (${moreSuggestions.length + ASK_WITNESS_INVESTIGATOR_QUESTIONS.length})` : "More investigator questions"}
+          </summary>
+          {moreSuggestions.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="More suggested questions">
+              {moreSuggestions.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  className="rounded-[5px] border border-line-strong bg-surface-2 px-2 py-0.5 text-left text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+                  disabled={ask.isPending}
+                  onClick={() => submit(q, SUGGESTION_MODE[q])}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Investigator questions">
+            {ASK_WITNESS_INVESTIGATOR_QUESTIONS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+                disabled={ask.isPending}
+                onClick={() => submit(q)}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </details>
+        <p className="mb-1.5 text-[11px] text-fg-2">Answers are concise by default; use More detail or Explain simply on any answer for more.</p>
         <form onSubmit={onFormSubmit} className="flex gap-1.5">
           <input
             aria-label="Ask a question about this finding"
@@ -235,6 +331,6 @@ export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWi
       </div>
 
       {openId ? <EvidenceRefDrawer id={openId} evidenceRef={index.get(openId)} onClose={() => setOpenId(null)} /> : null}
-    </Panel>
+    </>,
   );
 }

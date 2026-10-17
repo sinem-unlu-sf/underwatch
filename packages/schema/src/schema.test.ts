@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   API_CONTRACT,
+  API_ROUTES,
   FINDING_STATUS_TRANSITIONS,
   FindingStatus,
   FixtureRunFile,
@@ -52,7 +53,10 @@ describe("api query parsing", () => {
     expect(() => RunsQuery.parse({ has_findings: "yes" })).toThrow();
   });
   it("has a contract entry per route", () => {
-    expect(Object.keys(API_CONTRACT)).toHaveLength(32); // +runInvestigations, +investigations (Ask Witness scopes)
+    // 32 base routes (incl. Ask Witness scopes) + Addendum C additions (findingGraphSummary, findingBrief). One entry per route key.
+    expect(Object.keys(API_CONTRACT).sort()).toEqual(Object.keys(API_ROUTES).sort());
+    expect(Object.keys(API_CONTRACT)).toContain("findingBrief");
+    expect(Object.keys(API_CONTRACT).length).toBeGreaterThanOrEqual(33);
   });
 });
 

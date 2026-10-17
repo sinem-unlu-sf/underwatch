@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, MutationError, SkeletonBlock } from "../states"
 import { Panel } from "../ui";
 import { EnforcementExplainer, MechanismBadge } from "./parts";
 import { SafeguardReview } from "./SafeguardReview";
+import { SafeguardWorkflow, workflowForListItem } from "./Workflow";
 
 export interface CreateSafeguardRequest {
   investigationId: string | null;
@@ -102,7 +103,7 @@ export function FindingSafeguardsPanel({
         }
       >
         <div className="space-y-3">
-          <p className="rounded-[3px] border border-warn/40 bg-warn/5 px-2 py-1 text-[12px] text-fg-1">
+          <p className="rounded-md border border-warn/40 bg-warn/5 px-3 py-2 text-[12px] text-fg-1">
             <span className="font-medium text-warn">CLAUDE.md is guidance, not a security boundary.</span> Only permission rules and hooks can block actions,
             and only a passing verification run shows that a safeguard worked for the tested scenario. Nothing is written without a visible diff and your
             explicit approval.
@@ -142,7 +143,7 @@ export function FindingSafeguardsPanel({
                   <EnforcementExplainer m={m} compact />
                   <ul className="space-y-1.5">
                     {g.items.map((s) => (
-                      <li key={s.id} className="rounded-[3px] border border-line bg-surface-2">
+                      <li key={s.id} className="rounded-md border border-line bg-surface-1">
                         <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5">
                           <FixtureBadge isFixture={s.is_fixture} compact />
                           <button
@@ -161,6 +162,9 @@ export function FindingSafeguardsPanel({
                           <Link to={`/safeguards/${encodeURIComponent(s.id)}`} className="text-[12px] text-focus hover:underline">
                             open
                           </Link>
+                        </div>
+                        <div className="px-2 pb-1.5">
+                          <SafeguardWorkflow compact input={workflowForListItem(s)} label={`Workflow for ${s.title}`} />
                         </div>
                         {expanded === s.id ? (
                           <div className="border-t border-line p-2">

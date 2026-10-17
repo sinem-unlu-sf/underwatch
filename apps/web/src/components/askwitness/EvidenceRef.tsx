@@ -23,7 +23,7 @@ export function EvidenceChip({ id, evidenceRef, onOpen }: { id: string; evidence
       type="button"
       onClick={() => onOpen(id)}
       title={evidenceRef ? `${evidenceRef.kind}${basis ? ` · ${basis}` : ""}: ${evidenceRef.summary}` : "Open evidence"}
-      className={`inline-flex items-center gap-1 rounded-[3px] border bg-surface-2 px-1.5 py-px font-mono text-[11px] leading-4 hover:bg-surface-3 ${tone}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded-[3px] border bg-surface-2 px-1.5 py-px text-left font-mono break-all text-[11px] leading-4 hover:bg-surface-3 ${tone}`}
     >
       {id}
     </button>
@@ -35,7 +35,7 @@ export function InvalidIdChip({ id }: { id: string }) {
   return (
     <span
       title="Cited by the model but not present in the evidence bundle sent to it. Ignored."
-      className="inline-flex items-center rounded-[3px] border border-dashed border-risk/55 px-1.5 py-px font-mono text-[11px] leading-4 text-risk line-through"
+      className="inline-flex max-w-full items-center rounded-[3px] border border-dashed border-risk/55 break-all px-1.5 py-px font-mono text-[11px] leading-4 text-risk line-through"
     >
       {id}
     </span>

@@ -1,0 +1,279 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { FindingsResponse, OverviewResponse, SafeguardsResponse, type FindingListItem, type RunListItem, type SafeguardListItem } from "@kw/schema";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OverviewPage, rankOpenFindings, safeguardAction } from "./OverviewPage";
+
+const T0 = "2026-10-17T01:00:00.000Z";
+const T1 = "2026-10-17T02:00:00.000Z";
+const T2 = "2026-10-17T03:00:00.000Z";
+
+function run(id: string, over: Partial<RunListItem> = {}): RunListItem {
+  return {
+    id,
+    is_fixture: false,
+    label: `Run ${id}`,
+    agent_type: "claude_code",
+    adapter: "claude-code",
+    task_description: "Fix the README typo",
+    repository_id: null,
+    repository_revision: null,
+    policy_version: null,
+    started_at: T0,
+    ended_at: T1,
+    status: "completed",
+    coverage_status: "complete",
+    created_at: T0,
+    event_count: 10,
+    finding_count: 1,
+    open_finding_count: 1,
+    max_open_severity: "high",
+    ...over,
+  };
+}
+
+function finding(id: string, over: Partial<FindingListItem> = {}): FindingListItem {
+  return {
+    id,
+    run_id: "run_live1",
+    is_fixture: false,
+    category: "unreported_observed_action",
+    title: `Finding ${id}`,
+    description: `Why ${id} was flagged`,
+    severity: "medium",
+    confidence: "medium",
+    status: "new",
+    policy_id: null,
+    policy_rule_id: null,
+    recommended_next_step: "Review",
+    missing_information: [],
+    related_event_ids: [],
+    evidence_ids: [],
+    recurrence_of_finding_id: null,
+    created_at: T0,
+    updated_at: T0,
+    run_label: "Run run_live1",
+    ...over,
+  };
+}
+
+function safeguard(id: string, over: Partial<SafeguardListItem> = {}): SafeguardListItem {
+  return {
+    id,
+    finding_id: "fnd_a",
+    is_fixture: false,
+    type: "permission_rule",
+    title: `Safeguard ${id}`,
+    content: "deny Read(.env)",
+    application_mechanism: "permissions.deny in .claude/settings.json",
+    target_path: null,
+    intended_effect: "Block .env reads",
+    legitimate_workflow_impact: "None expected",
+    approval_status: "approved",
+    application_status: "applied",
+    verification_status: "verified_for_tested_scenario",
+    created_at: T0,
+    approved_at: T0,
+    approved_by: "reviewer",
+    applied_at: T0,
+    last_verification_run_id: null,
+    finding_title: "Finding fnd_a",
+    finding_status: "confirmed",
+    run_id: "run_live1",
+    last_verification: null,
+    ...over,
+  };
+}
+
+const totals = (n: number) => ({ runs: n, events: n, findings: n, safeguards: n, verification_runs: n });
+
+function overview(over: Partial<OverviewResponse> = {}): OverviewResponse {
+  return OverviewResponse.parse({
+    generated_at: T2,
+    data_mode: { fixture_runs: 1, live_runs: 1, contains_fixture_data: true },
+    totals: totals(2),
+    breakdown: { fixture: totals(1), live: totals(1) },
+    recent_runs: { count: 2, items: [run("run_live1"), run("run_fx1", { is_fixture: true, coverage_status: "partial", label: "Fixture run" })] },
+    runs_needing_review: { count: 1, items: [run("run_live1")] },
+    new_findings: { count: 0, items: [] },
+    confirmed_findings: { count: 0, items: [] },
+    safeguards_awaiting_approval: { count: 0, items: [] },
+    recent_verification_results: { count: 0, items: [] },
+    observation_health: {
+      overall: "degraded",
+      components: [
+        { id: "tetragon", name: "Kernel tracer", status: "connected", detail: "ok", configured_via: null },
+        { id: "neo4j", name: "Neo4j", status: "degraded", detail: "slow responses", configured_via: "NEO4J_URI" },
+      ],
+    },
+    ...over,
+  });
+}
+
+// --- fetch mock --------------------------------------------------------------------------------------------------
+
+let bodies: Record<string, unknown> = {};
+let calls: string[] = [];
+
+function reply(status: number, body: unknown): Response {
+  const text = JSON.stringify(body);
+  return { ok: status >= 200 && status < 300, status, text: async () => text } as unknown as Response;
+}
+
+beforeEach(() => {
+  calls = [];
+  bodies = {
+    "/api/overview": overview(),
+    "/api/findings": FindingsResponse.parse({
+      items: [
+        finding("fnd_low", { severity: "low", confidence: "high", created_at: T2, description: "", recommended_next_step: "Check the diff" }),
+        finding("fnd_crit", { severity: "critical", confidence: "low", created_at: T0 }),
+        finding("fnd_high_hi", { severity: "high", confidence: "high", created_at: T0 }),
+        finding("fnd_high_lo", { severity: "high", confidence: "low", created_at: T1 }),
+        finding("fnd_done", { severity: "critical", status: "resolved" }),
+        finding("fnd_conf", { severity: "critical", status: "confirmed" }),
+      ],
+      total: 6,
+    }),
+    "/api/safeguards": SafeguardsResponse.parse({
+      items: [
+        safeguard("sg_ok"),
+        safeguard("sg_prop", { approval_status: "proposed", application_status: "not_applied", verification_status: "not_tested", approved_at: null, approved_by: null, applied_at: null }),
+        safeguard("sg_fail", { verification_status: "failed_verification" }),
+        safeguard("sg_inc", { verification_status: "verification_inconclusive" }),
+      ],
+      total: 4,
+    }),
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string) => {
+      const url = new URL(input, "http://localhost");
+      calls.push(url.pathname + url.search);
+      const body = bodies[url.pathname];
+      return body ? reply(200, body) : reply(404, { error: { code: "not_found", message: `no mock for ${url.pathname}` } });
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <OverviewPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe("rankOpenFindings", () => {
+  it("keeps only open statuses and orders by severity, then confidence, then recency", () => {
+    const ranked = rankOpenFindings([
+      finding("a", { severity: "low", confidence: "high" }),
+      finding("b", { severity: "high", confidence: "low" }),
+      finding("c", { severity: "high", confidence: "high" }),
+      finding("d", { severity: "critical", status: "dismissed" }),
+      finding("e", { severity: "high", confidence: "high", status: "under_review", created_at: T2 }),
+    ]);
+    expect(ranked.map((f) => f.id)).toEqual(["e", "c", "b", "a"]);
+  });
+});
+
+describe("safeguardAction", () => {
+  it("flags failed, inconclusive and proposed safeguards; verified + applied needs nothing", () => {
+    expect(safeguardAction(safeguard("x"))).toBeNull();
+    expect(safeguardAction(safeguard("x", { verification_status: "failed_verification" }))).toMatch(/failed/i);
+    expect(safeguardAction(safeguard("x", { verification_status: "verification_inconclusive" }))).toMatch(/inconclusive/i);
+    expect(safeguardAction(safeguard("x", { approval_status: "proposed" }))).toMatch(/proposed/i);
+    expect(safeguardAction(safeguard("x", { application_status: "application_failed" }))).toMatch(/application failed/i);
+  });
+});
+
+describe("OverviewPage", () => {
+  it("ranks open findings with a one-line reason and links each to its finding", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Needs your attention" });
+    const list = await within(section).findByRole("list", { name: "Findings" });
+    const links = within(list)
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.startsWith("/findings/"));
+    expect(links.map((a) => a.textContent)).toEqual(["Finding fnd_crit", "Finding fnd_high_hi", "Finding fnd_high_lo", "Finding fnd_low"]);
+    expect(links[0]).toHaveAttribute("href", "/findings/fnd_crit");
+    expect(within(list).getByText("Why fnd_crit was flagged")).toBeInTheDocument();
+    // Without a description, the recommended next step is the one-line reason.
+    expect(within(list).getByText("Next step: Check the diff")).toBeInTheDocument();
+    // Resolved and confirmed findings are not "open".
+    expect(within(list).queryByText("Finding fnd_done")).toBeNull();
+    expect(within(section).getByRole("link", { name: "All open findings" })).toHaveAttribute("href", "/findings?status=open");
+  });
+
+  it("labels live vs fixture runs, shows coverage caveats, and keeps the fixture/live breakdown", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Recent runs" });
+    const rows = within(section).getAllByRole("listitem");
+    expect(within(rows[0]!).getByText("live")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("FIXTURE")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("coverage: partial")).toBeInTheDocument();
+    expect(within(rows[0]!).queryByText(/coverage:/)).toBeNull();
+    expect(screen.getByTestId("data-mode")).toHaveTextContent("1 live run · 1 fixture run");
+    expect(screen.getByTestId("record-counts")).toHaveTextContent("(fixture 1 · live 1)");
+  });
+
+  it("lists safeguards needing action (failed first) and omits ones that need nothing", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Safeguards needing action" });
+    const list = await within(section).findByRole("list", { name: "Safeguards" });
+    const titles = within(list)
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.startsWith("/safeguards/"))
+      .map((a) => a.textContent);
+    expect(titles).toEqual(["Safeguard sg_fail", "Safeguard sg_inc", "Safeguard sg_prop"]);
+    expect(within(list).getByText(/Verification inconclusive: the run did not establish the outcome/)).toBeInTheDocument();
+    expect(within(list).queryByText("Safeguard sg_ok")).toBeNull();
+  });
+
+  it("shows a compact system status with problems inline and a link to Settings", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Observation system" });
+    expect(within(section).getByText(/1 working/)).toBeInTheDocument();
+    expect(within(section).getByText(/Neo4j: slow responses/)).toBeInTheDocument();
+    expect(within(section).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("explains how to start a supervised run when nothing has been recorded", async () => {
+    bodies["/api/overview"] = overview({
+      data_mode: { fixture_runs: 0, live_runs: 0, contains_fixture_data: false },
+      totals: totals(0),
+      breakdown: { fixture: totals(0), live: totals(0) },
+      recent_runs: { count: 0, items: [] },
+      runs_needing_review: { count: 0, items: [] },
+    });
+    bodies["/api/findings"] = FindingsResponse.parse({ items: [], total: 0 });
+    bodies["/api/safeguards"] = SafeguardsResponse.parse({ items: [], total: 0 });
+    renderPage();
+    expect(await screen.findByRole("heading", { name: "No runs recorded yet" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Start supervised run/ })).toHaveAttribute("href", "/runs");
+    expect(screen.getByText("pnpm seed:fixtures")).toBeInTheDocument();
+    expect(await screen.findByText("No open findings")).toBeInTheDocument();
+  });
+
+  it("loads once and never polls", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      await screen.findByRole("region", { name: "Needs your attention" });
+      await waitFor(() => expect(calls.filter((c) => c.startsWith("/api/findings")).length).toBe(1));
+      const before = calls.length;
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(calls.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

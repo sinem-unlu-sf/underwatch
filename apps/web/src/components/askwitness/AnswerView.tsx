@@ -1,7 +1,10 @@
 import {
   EVIDENCE_SUPPORT_LABELS,
   SAFEGUARD_TYPE_LABELS,
+  type ActionClaimFlag,
   type AskWitnessAnswer,
+  type AskWitnessDepth,
+  type AskWitnessStyle,
   type BundleEvidenceRef,
   type CheckedClaim,
   type EvidenceSupport,
@@ -116,7 +119,56 @@ function ClaimSection({
   );
 }
 
-export function AnswerBody({ answer, ev, onCreateSafeguard }: { answer: AskWitnessAnswer; ev: EvidenceLookup; onCreateSafeguard?: () => void }) {
+/** Addendum C: follow-up modes offered on each answer (same investigation, same evidence rules). */
+export interface FollowUpMode {
+  depth?: AskWitnessDepth;
+  style?: AskWitnessStyle;
+}
+
+/** Follow-up question text for a quick action, referencing the original question (kept under the 2000-char limit). */
+export function followUpQuestion(kind: "detail" | "simple", original: string): string {
+  const q = original.length > 1800 ? `${original.slice(0, 1800)}…` : original;
+  return kind === "detail" ? `More detail on: ${q}` : `Explain simply: ${q}`;
+}
+
+const CLAIM_KIND_LABEL: Record<ActionClaimFlag["claim"], string> = {
+  verified: "verification",
+  tested: "test",
+  applied: "applied change",
+  fixed: "fix / resolution",
+};
+
+function ActionClaimFlags({ flags }: { flags: ActionClaimFlag[] }) {
+  if (flags.length === 0) return null;
+  return (
+    <section aria-label="Unconfirmed action claims" className="space-y-1 rounded-[3px] border border-risk/50 bg-risk/5 px-2 py-1.5">
+      <h4 className="text-[11px] font-semibold tracking-wide text-risk uppercase">Unconfirmed action claims (checked by Kernel Witness, not the AI)</h4>
+      <ul className="space-y-1 text-[12px] text-fg-1">
+        {flags.map((f, i) => (
+          <li key={i}>
+            <span className="italic">&ldquo;{f.text}&rdquo;</span>{" "}
+            <Badge tone="unknown" title={f.reason}>
+              No record confirms this {CLAIM_KIND_LABEL[f.claim]}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function AnswerBody({
+  answer,
+  ev,
+  onCreateSafeguard,
+  inChat = false,
+}: {
+  answer: AskWitnessAnswer;
+  ev: EvidenceLookup;
+  onCreateSafeguard?: () => void;
+  /** Chat layout: the summary, insufficient-evidence line and action-claim flags are rendered by TurnView above the disclosure. */
+  inChat?: boolean;
+}) {
   const observed = answer.verified_facts.filter((f) => f.support === "observed_evidence");
   const reported = answer.verified_facts.filter((f) => f.support === "reported_evidence_only");
   const derived = answer.verified_facts.filter((f) => f.support === "derived_only");
@@ -124,13 +176,13 @@ export function AnswerBody({ answer, ev, onCreateSafeguard }: { answer: AskWitne
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] whitespace-pre-wrap text-fg-0">{answer.summary}</p>
-
-      {answer.insufficient_evidence ? (
-        <div role="status" className="hatch rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">
-          Insufficient evidence: the evidence bundle does not support a definitive answer. Treat the summary as tentative.
-        </div>
-      ) : null}
+      {inChat ? null : (
+        <>
+          <p className="text-[13px] whitespace-pre-wrap text-fg-0">{answer.summary}</p>
+          <InsufficientLine show={answer.insufficient_evidence} />
+          <ActionClaimFlags flags={answer.action_claim_flags ?? []} />
+        </>
+      )}
 
       {answer.evidence_limitations && answer.evidence_limitations.length > 0 ? (
         <section aria-label="Limits of the evidence sent" className="space-y-1 rounded-[3px] border border-line px-2 py-1.5">
@@ -248,14 +300,19 @@ export function TurnView({
   onRetry,
   retrying,
   onCreateSafeguard,
+  onFollowUp,
 }: {
   turn: InvestigationTurn;
   ev: EvidenceLookup;
-  onRetry?: (question: string) => void;
+  onRetry?: (question: string, mode?: FollowUpMode) => void;
   retrying?: boolean;
   onCreateSafeguard?: () => void;
+  /** Addendum C quick actions: ask a follow-up in the same investigation with more depth or simpler wording. */
+  onFollowUp?: (question: string, mode: FollowUpMode) => void;
 }) {
   const failed = turn.answer === null;
+  const depth = turn.depth ?? "concise";
+  const style = turn.style ?? "standard";
   return (
     <article className="space-y-2" aria-label={`Question: ${turn.question}`}>
       <div className="flex justify-end">
@@ -269,6 +326,10 @@ export function TurnView({
           <span className="font-mono">model {turn.model}</span>
           <span className="font-mono">prompt {turn.prompt_version}</span>
           <span className="font-mono">{turn.evidence_ids.length} evidence items sent</span>
+          <Badge tone="muted" title="Answer depth and wording requested for this turn. The evidence and citation checks are the same in every mode.">
+            {depth === "detailed" ? "Detailed" : "Concise"}
+            {style === "simple" ? " · simple wording" : ""}
+          </Badge>
         </div>
         {failed ? (
           <div role="alert" className="rounded-[3px] border border-warn/50 bg-warn/10 p-2">
@@ -280,13 +341,37 @@ export function TurnView({
               <p className="mt-0.5 text-[11px] text-fg-2">Set AIAND_API_KEY in .env.local on the server, then restart it.</p>
             ) : null}
             {onRetry ? (
-              <button type="button" className="btn mt-1.5" onClick={() => onRetry(turn.question)} disabled={retrying}>
+              <button type="button" className="btn mt-1.5" onClick={() => onRetry(turn.question, { depth, style })} disabled={retrying}>
                 {retrying ? "Retrying…" : "Retry"}
               </button>
             ) : null}
           </div>
         ) : (
-          <AnswerBody answer={turn.answer!} ev={ev} onCreateSafeguard={onCreateSafeguard} />
+          <>
+            <AnswerBody answer={turn.answer!} ev={ev} onCreateSafeguard={onCreateSafeguard} />
+            {onFollowUp ? (
+              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-line pt-2" role="group" aria-label="Follow-up on this answer">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={retrying}
+                  title="Ask again in this investigation with a detailed answer (same evidence, same citation checks)"
+                  onClick={() => onFollowUp(followUpQuestion("detail", turn.question), { depth: "detailed", style })}
+                >
+                  More detail
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={retrying}
+                  title="Ask again in this investigation in plain language (same evidence, same citation checks)"
+                  onClick={() => onFollowUp(followUpQuestion("simple", turn.question), { depth, style: "simple" })}
+                >
+                  Explain simply
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </article>

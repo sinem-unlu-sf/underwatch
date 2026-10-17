@@ -14,6 +14,7 @@ import type {
   FileConflictDetails,
   FileDiffPreview,
   FindingGraphResponse,
+  KeyRelationshipsSummary,
   FindingInvestigationsResponse,
   InvestigationDetailResponse,
   SafeguardApproveBody,
@@ -230,6 +231,8 @@ export interface VerificationService {
 
 export interface GraphService {
   findingGraph(findingId: string): Promise<FindingGraphResponse>;
+  /** Addendum C: key relationships for a finding (same data as FindingGraphResponse.key_relationships). */
+  findingGraphSummary(findingId: string): Promise<KeyRelationshipsSummary>;
 }
 
 export interface ServiceRegistry {

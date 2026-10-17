@@ -2,6 +2,10 @@ import { DigestDate, isValidTimeZone, type DigestGroup, type DigestResponse, typ
 import { useMemo, useState, type ReactNode } from "react";
 import { useDigest, useRefreshDigest } from "../../api/findingsViews";
 import { SeverityBadge } from "../badges";
+import { Button, IconButton } from "../ds/Button";
+import { Icon } from "../ds/Icon";
+import { Notice } from "../ds/Notice";
+import { SegmentedControl } from "../ds/SegmentedControl";
 import { EmptyState, ErrorState, MutationError, SkeletonRows } from "../states";
 import { Panel, Time } from "../ui";
 import { CompletenessNotice } from "./CompletenessNotice";
@@ -53,9 +57,7 @@ export function DigestMode() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="btn" aria-label="Previous day" onClick={() => goTo({ date: shiftDate(date, -1), version: undefined })}>
-          ←
-        </button>
+        <IconButton variant="secondary" icon="chevronLeft" label="Previous day" onClick={() => goTo({ date: shiftDate(date, -1), version: undefined })} />
         <input
           type="date"
           aria-label="Digest date"
@@ -66,23 +68,21 @@ export function DigestMode() {
             if (DigestDate.safeParse(e.target.value).success) goTo({ date: e.target.value, version: undefined });
           }}
         />
-        <button
-          type="button"
-          className="btn"
-          aria-label="Next day"
+        <IconButton
+          variant="secondary"
+          icon="chevronRight"
+          label="Next day"
           disabled={date >= today}
           onClick={() => goTo({ date: shiftDate(date, 1), version: undefined })}
-        >
-          →
-        </button>
-        <span className="text-[12px] text-fg-2" title="Day boundaries are computed in this IANA time zone">
+        />
+        {date !== today ? (
+          <Button variant="ghost" onClick={() => goTo({ date: today, version: undefined })}>
+            Today
+          </Button>
+        ) : null}
+        <span className="font-mono text-[11.5px] text-fg-2" title="Day boundaries are computed in this IANA time zone">
           {tz}
         </span>
-        {date !== today ? (
-          <button type="button" className="btn" onClick={() => goTo({ date: today, version: undefined })}>
-            Today
-          </button>
-        ) : null}
       </div>
 
       {digest.isPending ? (
@@ -148,8 +148,9 @@ function DigestBody({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 text-[12px] text-fg-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-1 px-3 py-2 text-[12px] text-fg-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Icon name="clock" size={13} />
           <span className="text-fg-1">
             Snapshot v{snapshot.version} from <Time iso={snapshot.created_at} />
           </span>
@@ -169,32 +170,49 @@ function DigestBody({
             </select>
           ) : null}
           {refreshNote ? <span role="status">· {refreshNote}</span> : null}
+          <span className="text-[11.5px]">· stored snapshot, does not update on its own</span>
         </div>
-        <button type="button" className="btn" onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}>
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        <Button
+          size="sm"
+          onClick={onRefresh}
+          loading={refreshing}
+          loadingText="Refreshing…"
+          title="Re-compute this day's digest. A new version is stored only if the content changed."
+        >
+          Refresh
+        </Button>
       </div>
 
       {refreshError ? <MutationError error={refreshError} what="refresh the digest" /> : null}
 
       {!isLatest ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[4px] border border-focus/40 px-3 py-2 text-[12px]">
-          <span className="text-fg-1">You are viewing an older snapshot. A newer snapshot (v{latest}) exists.</span>
-          <button type="button" className="text-focus hover:underline" onClick={() => onOpenVersion(null)}>
-            Open newer snapshot
-          </button>
-        </div>
+        <Notice
+          tone="caution"
+          title="Older snapshot"
+          actions={
+            <Button size="sm" onClick={() => onOpenVersion(null)}>
+              Open newer snapshot
+            </Button>
+          }
+        >
+          You are viewing an older snapshot. A newer snapshot (v{latest}) exists.
+        </Notice>
       ) : data.newer_available ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[4px] border border-focus/40 px-3 py-2 text-[12px]">
-          <span className="text-fg-1">
+        <Notice
+          tone="info"
+          title="Possibly stale"
+          actions={
+            <Button size="sm" onClick={onRefresh} disabled={refreshing}>
+              Refresh to open a newer snapshot
+            </Button>
+          }
+        >
+          <span>
             Newer findings available ({data.changes.new_finding_ids.length} new, {data.changes.updated_finding_ids.length} updated
             {data.changes.removed_finding_ids.length > 0 ? `, ${data.changes.removed_finding_ids.length} removed` : ""}). Checked{" "}
             <Time iso={data.checked_at} />.
           </span>
-          <button type="button" className="text-focus hover:underline" onClick={onRefresh} disabled={refreshing}>
-            Refresh to open a newer snapshot
-          </button>
-        </div>
+        </Notice>
       ) : null}
 
       <Panel
@@ -214,20 +232,16 @@ function DigestBody({
         bodyClassName=""
         title={`Grouped by ${groupBy}`}
         aside={
-          <div role="radiogroup" aria-label="Group digest by" className="inline-flex gap-1">
-            {(["task", "category"] as const).map((g) => (
-              <button
-                key={g}
-                type="button"
-                role="radio"
-                aria-checked={groupBy === g}
-                onClick={() => onGroupBy(g)}
-                className={`rounded-[3px] px-2 py-0.5 text-[12px] ${groupBy === g ? "bg-surface-3 text-fg-0" : "text-fg-2 hover:text-fg-0"}`}
-              >
-                {g === "task" ? "Task" : "Category"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            label="Group digest by"
+            value={groupBy}
+            onChange={onGroupBy}
+            options={[
+              { value: "task", label: "Task" },
+              { value: "category", label: "Category" },
+            ]}
+          />
         }
       >
         {content.findings.length === 0 ? (
@@ -274,11 +288,16 @@ function GroupRow({
 }) {
   return (
     <li className="border-b border-line last:border-b-0">
-      <button type="button" aria-expanded={open} onClick={onToggle} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2">
-        <span className="w-4 font-mono text-fg-2">{open ? "▾" : "▸"}</span>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left transition-colors duration-120 ease-out hover:bg-surface-2"
+      >
+        <Icon name={open ? "chevronDown" : "chevronRight"} size={13} className="text-fg-2" />
         <span className="min-w-0 flex-1 truncate font-medium text-fg-0">{group.label}</span>
         {group.max_severity ? <SeverityBadge severity={group.max_severity} /> : null}
-        <span className="text-[12px] whitespace-nowrap text-fg-2">
+        <span className="text-[12px] whitespace-nowrap text-fg-2 tabular-nums">
           {group.finding_ids.length} finding{group.finding_ids.length === 1 ? "" : "s"} · {group.open_count} open · {group.run_ids.length} run
           {group.run_ids.length === 1 ? "" : "s"}
         </span>

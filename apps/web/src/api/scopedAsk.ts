@@ -130,13 +130,15 @@ export interface ScopedInvestigationListItem {
   id: string;
   updated_at: string;
   turn_count: number;
+  /** Most recent question in the investigation, when the server lists it (same list shape as the finding scope). */
+  last_question: string | null;
 }
 
 export function parseList(body: unknown): ScopedInvestigationListItem[] {
   if (!isObj(body) || !Array.isArray(body.items)) throw new ContractError("(root): missing items");
   return body.items
     .filter((i): i is Obj => isObj(i) && typeof i.id === "string")
-    .map((i) => ({ id: i.id as string, updated_at: str(i.updated_at) ?? "", turn_count: typeof i.turn_count === "number" ? i.turn_count : 0 }));
+    .map((i) => ({ id: i.id as string, updated_at: str(i.updated_at) ?? "", turn_count: typeof i.turn_count === "number" ? i.turn_count : 0, last_question: str(i.last_question) }));
 }
 
 async function call<T>(path: string, parse: (body: unknown) => T, init?: RequestInit): Promise<T> {

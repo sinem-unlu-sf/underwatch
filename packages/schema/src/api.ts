@@ -38,8 +38,9 @@ import {
   InvestigationsListQuery,
   ScopedInvestigationsResponse,
 } from "./askwitness";
+import { AccountAuthResponse, AccountLoginBody, AccountMeResponse, AccountSignupBody } from "./accounts";
 import { FindingGraphResponse, FindingGraphSummaryResponse } from "./graph";
-import { FindingBrief, FindingBriefResponse } from "./brief";
+import { FindingBrief, FindingBriefResponse, ShortRead } from "./brief";
 import {
   MechanismsResponse,
   SafeguardApproveBody,
@@ -107,6 +108,11 @@ export const API_ROUTES = {
   safeguardVerificationRuns: "/api/safeguards/:id/verification-runs",
   verificationRun: "/api/verification-runs/:id",
   verificationHarness: "/api/verification/harness",
+  // Local accounts ---------------------------------------------------------------------------------------------
+  accountSignup: "/api/accounts/signup",
+  accountLogin: "/api/accounts/login",
+  accountLogout: "/api/accounts/logout",
+  accountMe: "/api/accounts/me",
 } as const;
 export type ApiRouteKey = keyof typeof API_ROUTES;
 
@@ -146,6 +152,10 @@ export const apiPaths = {
   safeguardVerificationRuns: (id: string) => `/api/safeguards/${enc(id)}/verification-runs`,
   verificationRun: (id: string) => `/api/verification-runs/${enc(id)}`,
   verificationHarness: () => API_ROUTES.verificationHarness,
+  accountSignup: () => API_ROUTES.accountSignup,
+  accountLogin: () => API_ROUTES.accountLogin,
+  accountLogout: () => API_ROUTES.accountLogout,
+  accountMe: () => API_ROUTES.accountMe,
 } as const satisfies Record<ApiRouteKey, (...args: string[]) => string>;
 
 /**
@@ -180,6 +190,8 @@ export const ApiErrorCode = z.enum([
   "file_conflict",
   "ai_unavailable",
   "timeout",
+  /** 429: too many signup/login attempts (local accounts). */
+  "rate_limited",
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
 
@@ -439,6 +451,8 @@ export const FindingDetailResponse = z.object({
    * A presentation, never a separate source of truth. Optional: omitted if it could not be built.
    */
   brief: FindingBrief.optional(),
+  /** Deterministic <= 150-word short read of the same records (finding, numbers, why, fix). Optional like `brief`. */
+  short_read: ShortRead.optional(),
 });
 export type FindingDetailResponse = z.infer<typeof FindingDetailResponse>;
 
@@ -510,6 +524,8 @@ export const SettingsStatusResponse = z.object({
   }),
   redaction: z.object({ status: IntegrationStatus, detail: z.string() }),
   data_mode: DataMode,
+  /** Number of local accounts (count only; no names or emails). Optional for older servers. */
+  local_accounts: z.number().int().nonnegative().optional(),
 });
 export type SettingsStatusResponse = z.infer<typeof SettingsStatusResponse>;
 
@@ -541,7 +557,7 @@ interface EndpointContract {
   body?: z.ZodType;
   response: z.ZodType;
   /** Success status when not 200. */
-  status?: 201 | 202;
+  status?: 201 | 202 | 204;
   /** Response content type when not application/json. */
   contentType?: "text/plain";
 }
@@ -602,6 +618,12 @@ export const API_CONTRACT = {
   },
   verificationRun: { method: "GET", path: API_ROUTES.verificationRun, params: IdParams, response: VerificationRunResponse },
   verificationHarness: { method: "GET", path: API_ROUTES.verificationHarness, response: VerificationHarnessStatus },
+  // Local accounts: signup needs the local API token (Bearer or setup_code); signup/login need no Bearer otherwise.
+  accountSignup: { method: "POST", path: API_ROUTES.accountSignup, body: AccountSignupBody, response: AccountAuthResponse, status: 201 },
+  accountLogin: { method: "POST", path: API_ROUTES.accountLogin, body: AccountLoginBody, response: AccountAuthResponse },
+  /** 204 No Content; revokes the presented session token. */
+  accountLogout: { method: "POST", path: API_ROUTES.accountLogout, response: z.null(), status: 204 },
+  accountMe: { method: "GET", path: API_ROUTES.accountMe, response: AccountMeResponse },
 } as const satisfies Record<ApiRouteKey, EndpointContract>;
 
 /** Same paths, second method. Kept separate so API_CONTRACT stays one entry per route key. */

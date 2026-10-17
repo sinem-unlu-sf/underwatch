@@ -14,6 +14,9 @@ import { useMemo, useState } from "react";
 import { useCurrentSnapshot } from "../../api/findingsViews";
 import { pickEnum } from "../../lib/searchParams";
 import { FixtureBadge } from "../badges";
+import { Button } from "../ds/Button";
+import { Icon } from "../ds/Icon";
+import { Notice } from "../ds/Notice";
 import { EmptyState, ErrorState, SkeletonRows } from "../states";
 import { Field, Panel, Time } from "../ui";
 import { CompletenessNotice } from "./CompletenessNotice";
@@ -106,24 +109,26 @@ export function CurrentStateMode() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-[12px] text-fg-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-1 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-fg-2">
+          <Icon name="clock" size={13} />
           <span>
             Last refreshed <Time iso={data.generated_at} className="text-fg-1" />
           </span>
           <RefreshStatus outcome={outcome} />
+          <span className="text-[11.5px] text-fg-2">· does not update on its own</span>
         </div>
         <RefreshButton refreshing={refreshing} onClick={refresh} />
       </div>
 
       {outcome.kind === "failed" ? (
-        <div role="alert" className="rounded-[4px] border border-risk/40 px-3 py-2 text-[12px] text-fg-1">
-          <span className="font-medium text-risk">Refresh failed.</span> Showing the previous snapshot from{" "}
-          <Time iso={data.generated_at} />. {outcome.error instanceof Error ? outcome.error.message : "The API did not answer."}
-        </div>
+        <Notice tone="danger" title="Refresh failed.">
+          Showing the previous snapshot from <Time iso={data.generated_at} />.{" "}
+          {outcome.error instanceof Error ? outcome.error.message : "The API did not answer."}
+        </Notice>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-3 rounded-[4px] border border-line bg-surface-1 p-3">
+      <div role="group" aria-label="Filters" className="flex flex-wrap items-end gap-3 border-b border-line pb-3 [&>*]:min-w-[8.5rem] [&>*]:flex-1 sm:[&>*]:flex-none">
         <Field label="Status">
           <select className="field" value={status ?? ""} onChange={(e) => patch({ status: e.target.value }, { replace: true })}>
             <option value="">Any</option>
@@ -167,13 +172,13 @@ export function CurrentStateMode() {
           </select>
         </Field>
         {filtered ? (
-          <button
-            type="button"
-            className="btn"
+          <Button
+            variant="ghost"
+            icon="x"
             onClick={() => patch(Object.fromEntries(FILTER_KEYS.map((k) => [k, undefined])), { replace: true })}
           >
             Clear filters
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -183,8 +188,12 @@ export function CurrentStateMode() {
         aside={data.data_mode.contains_fixture_data ? <FixtureNote /> : null}
       >
         {data.truncated ? (
-          <p className="border-b border-line px-3 py-2 text-[12px] text-warn">
-            Showing the first {data.findings.length} of {data.total} findings. Use By Task or Daily Digest to see the rest in context.
+          <p className="hatch flex items-center gap-1.5 border-b border-line px-3 py-2 text-[12px] text-warn">
+            <Icon name="alertCircle" size={13} />
+            <span>
+              Incomplete list: showing the first {data.findings.length} of {data.total} findings. Use By Task or Daily Digest to see the rest in
+              context.
+            </span>
           </p>
         ) : null}
         {data.findings.length === 0 ? (
@@ -216,9 +225,9 @@ export function CurrentStateMode() {
 
 function RefreshButton({ refreshing, onClick }: { refreshing: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="btn" onClick={onClick} disabled={refreshing} aria-busy={refreshing}>
-      {refreshing ? "Refreshing…" : "Refresh"}
-    </button>
+    <Button size="sm" onClick={onClick} loading={refreshing} loadingText="Refreshing…" title="Fetch the latest findings. This view never refreshes on its own.">
+      Refresh
+    </Button>
   );
 }
 

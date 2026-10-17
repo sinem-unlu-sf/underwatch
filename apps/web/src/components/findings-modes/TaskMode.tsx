@@ -6,6 +6,8 @@ import { useFindingContext, useTaskRun, useTaskRunFindings, useTasks } from "../
 import { queryKeys } from "../../api/queries";
 import { humanize, truncate } from "../../lib/format";
 import { Badge, BasisBadge, CoverageBadge, FixtureBadge, OutcomeBadge, RedactionBadge, RunStatusBadge } from "../badges";
+import { Button } from "../ds/Button";
+import { Icon } from "../ds/Icon";
 import { Cmd, EmptyState, ErrorState, SkeletonBlock, SkeletonRows } from "../states";
 import { Mono, Panel, Time } from "../ui";
 import { FindingRow, useExpanded } from "./FindingRow";
@@ -94,29 +96,34 @@ export function TaskMode() {
         bodyClassName=""
         aside={
           <>
-            {tasks.data ? <span>{tasks.data.total}</span> : null}
-            <button
-              type="button"
-              className="text-[12px] text-fg-1 hover:text-fg-0 disabled:opacity-60"
+            {tasks.data ? <span className="font-mono text-[11.5px] tabular-nums">{tasks.data.total}</span> : null}
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={refreshTasks}
-              disabled={refreshing || tasks.isPending}
-              aria-busy={refreshing}
+              disabled={tasks.isPending}
+              loading={refreshing}
+              loadingText="Refreshing…"
               title="Re-read tasks, runs and findings. This view never updates on its own."
             >
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
+              Refresh
+            </Button>
           </>
         }
       >
         {refreshNote ? (
-          <p role={refreshNote.ok ? "status" : "alert"} className={`border-b border-line px-3 py-1.5 text-[12px] ${refreshNote.ok ? "text-fg-2" : "text-risk"}`}>
-            {refreshNote.text}
+          <p
+            role={refreshNote.ok ? "status" : "alert"}
+            className={`flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[12px] ${refreshNote.ok ? "text-fg-2" : "bg-risk/8 text-risk"}`}
+          >
+            <Icon name={refreshNote.ok ? "check" : "alert"} size={12} />
+            <span>{refreshNote.text}</span>
           </p>
         ) : null}
         <div className="border-b border-line p-2">
           <input
             type="search"
-            className="field w-full"
+            className="field w-full font-sans"
             placeholder="Search tasks, repos, runs"
             aria-label="Search tasks"
             value={search}
@@ -134,7 +141,7 @@ export function TaskMode() {
         ) : visibleTasks.length === 0 ? (
           <EmptyState title="No tasks match this search" />
         ) : (
-          <ul aria-label="Task list" className="max-h-[70vh] overflow-y-auto">
+          <ul aria-label="Task list" className="max-h-[40vh] overflow-y-auto lg:max-h-[70vh]">
             {visibleTasks.map((t) => (
               <TaskListItem key={t.key} task={t} selected={t.key === taskKey} onSelect={() => selectTask(t.key)} />
             ))}
@@ -145,10 +152,10 @@ export function TaskMode() {
       <div className="flex min-w-0 flex-col gap-3">
         {previous ? (
           <div className="text-[12px] text-fg-2">
-            <button type="button" className="text-focus hover:underline" onClick={() => selectTask(previous.key)}>
+            <button type="button" className="text-accent hover:underline" onClick={() => selectTask(previous.key)}>
               ← Return to previous task
             </button>{" "}
-            <span>{truncate(previous.task_description, 80)}</span>
+            <span title={previous.task_description}>{truncate(previous.task_description, 80)}</span>
           </div>
         ) : null}
         {!taskKey ? (
@@ -184,14 +191,16 @@ function TaskListItem({ task, selected, onSelect }: { task: TaskContext; selecte
         type="button"
         aria-current={selected ? "true" : undefined}
         onClick={onSelect}
-        className={`flex w-full flex-col gap-1 px-3 py-2 text-left ${selected ? "bg-surface-3" : "hover:bg-surface-2"}`}
+        className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2 text-left transition-colors duration-120 ease-out ${
+          selected ? "border-accent bg-surface-3" : "border-transparent hover:bg-surface-2"
+        }`}
       >
         <span className="flex items-start gap-1.5">
           <FixtureBadge isFixture={task.contains_fixture_data} compact />
           <span className="line-clamp-2 text-fg-0">{task.task_description || "(no task description)"}</span>
         </span>
         <span className="flex flex-wrap gap-x-2 text-[11px] text-fg-2">
-          <span className={task.open_finding_count > 0 ? "text-warn" : ""}>
+          <span className={`tabular-nums ${task.open_finding_count > 0 ? "text-warn" : ""}`}>
             {task.finding_count} finding{task.finding_count === 1 ? "" : "s"}
             {task.open_finding_count > 0 ? ` · ${task.open_finding_count} open` : ""}
           </span>
@@ -214,15 +223,15 @@ function TaskDetail({ task, runId, onRun }: { task: TaskContext; runId: string |
       <Panel bodyClassName="flex flex-col gap-2 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <FixtureBadge isFixture={task.contains_fixture_data} />
-          <h2 className="text-[14px] font-semibold text-fg-0">{task.task_description || "(no task description)"}</h2>
+          <h2 className="min-w-0 text-[14px] font-semibold break-words text-fg-0">{task.task_description || "(no task description)"}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[12px] text-fg-2">
           <span>
             repository {task.repository_id ? <Mono>{task.repository_id}</Mono> : <span className="text-unknown">not recorded</span>}
           </span>
-          <label className="flex items-center gap-1.5">
+          <label className="flex min-w-0 max-w-full items-center gap-1.5">
             <span>Run</span>
-            <select className="field" aria-label="Run" value={runId ?? ""} onChange={(e) => onRun(e.target.value || null)}>
+            <select className="field min-w-0 max-w-full" aria-label="Run" value={runId ?? ""} onChange={(e) => onRun(e.target.value || null)}>
               <option value="">All runs in this task ({task.runs.length})</option>
               {task.runs.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -264,7 +273,8 @@ function RunSection({ runId, showEmpty }: { runId: string; showEmpty: boolean })
       bodyClassName=""
       title={
         <span className="flex items-center gap-2 normal-case">
-          <Link to={`/runs/${encodeURIComponent(runId)}`} className="hover:underline">
+          <Icon name="dot" size={12} className="text-fg-2" />
+          <Link to={`/runs/${encodeURIComponent(runId)}`} className="min-w-0 truncate hover:underline" title={runId}>
             {title}
           </Link>
         </span>
@@ -287,9 +297,9 @@ function RunSection({ runId, showEmpty }: { runId: string; showEmpty: boolean })
             Started <Time iso={ctx.run.started_at} />
           </span>
           <span>
-            <span className="text-reported">{ctx.counts.events_by_basis.reported ?? 0} agent-reported</span> ·{" "}
-            <span className="text-observed">{ctx.counts.events_by_basis.observed ?? 0} independently observed</span> ·{" "}
-            {ctx.counts.events_by_basis.derived ?? 0} derived events
+            <span className="tabular-nums text-reported">{ctx.counts.events_by_basis.reported ?? 0} agent-reported</span> ·{" "}
+            <span className="tabular-nums text-observed">{ctx.counts.events_by_basis.observed ?? 0} independently observed</span> ·{" "}
+            <span className="tabular-nums">{ctx.counts.events_by_basis.derived ?? 0} derived events</span>
           </span>
           <span>
             Policy{" "}
@@ -384,7 +394,9 @@ function TaskFindingDetail({ findingId }: { findingId: string }) {
             {evidence.map((ev) => (
               <li key={ev.id} className="flex flex-wrap items-center gap-2">
                 <Badge tone="muted">{humanize(ev.source_type)}</Badge>
-                <Mono className="text-fg-1">{ev.source_reference}</Mono>
+                <Mono className="min-w-0 text-fg-1" title={ev.source_reference}>
+                  {ev.source_reference}
+                </Mono>
                 <RedactionBadge status={ev.redaction_status} />
                 <Mono className="text-[11px] text-fg-2">{ev.id}</Mono>
               </li>

@@ -3,6 +3,9 @@ import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useEvidence } from "../../api/queries";
 import { Badge, BasisBadge, CorrelationBadge, FixtureBadge, OutcomeBadge, RedactionBadge, Unavailable } from "../badges";
+import { CodeBlock, CopyButton } from "../ds/CodeBlock";
+import { Icon } from "../ds/Icon";
+import { Kbd } from "../ds/Tooltip";
 import { ErrorState, SkeletonBlock } from "../states";
 import { Mono, Time } from "../ui";
 import { humanize } from "../../lib/format";
@@ -20,7 +23,8 @@ interface InspectorProps {
 export function EventInspector({ eventId, event, correlations, onSelect, onClose, onClearFilters }: InspectorProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Leave Escape to a dialog layered above (e.g. the Ask Witness drawer) when it already handled the key.
+      if (e.key === "Escape" && !e.defaultPrevented && !(e.target instanceof Element && e.target.closest('[role="dialog"]'))) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -29,23 +33,27 @@ export function EventInspector({ eventId, event, correlations, onSelect, onClose
   return (
     <aside
       aria-label="Evidence inspector"
-      className="fixed inset-y-0 right-0 z-30 flex w-[min(500px,100vw)] flex-col border-l border-line-strong bg-surface-1 shadow-[0_0_0_9999px_rgba(0,0,0,0.25)]"
+      className="kw-fade-in fixed inset-y-0 right-0 z-30 flex w-[min(500px,100vw)] flex-col border-l border-line-strong bg-elevated shadow-[var(--shadow-overlay)]"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-        <h2 className="text-[12px] font-semibold tracking-wide text-fg-1 uppercase">Evidence inspector</h2>
+      <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line px-4 py-2">
+        <Icon name="eye" size={14} className="text-fg-2" />
+        <h2 className="text-[13px] font-semibold text-fg-0">Evidence inspector</h2>
         {event ? <BasisBadge basis={event.basis} /> : null}
         {event ? <FixtureBadge isFixture={event.is_fixture} /> : null}
-        <button type="button" className="btn ml-auto" onClick={onClose}>
-          Close <span className="text-fg-2">Esc</span>
+        <button type="button" className="btn btn-ghost btn-sm ml-auto" onClick={onClose} aria-keyshortcuts="Escape">
+          <Icon name="x" size={13} /> Close <Kbd>Esc</Kbd>
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-3">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
         {event ? (
           <EventBody event={event} correlations={correlations} onSelect={onSelect} />
         ) : (
           <div className="space-y-2">
             <Mono>{eventId}</Mono>
-            <p className="text-fg-1">This event is not in the current timeline. It may be hidden by the active filters, or it does not belong to this run.</p>
+            <p className="text-fg-1">
+              This event is not in the current timeline. It may be hidden by the active filters, or it does not belong to this run.
+            </p>
             <button type="button" className="btn" onClick={onClearFilters}>
               Clear timeline filters
             </button>
@@ -70,18 +78,22 @@ function EventBody({ event: e, correlations, onSelect }: { event: Event; correla
   /** null means "does not apply" unless the source declared the field unavailable. */
   const val = (field: keyof Event, render: (v: NonNullable<Event[keyof Event]>) => ReactNode = (v) => <Mono>{String(v)}</Mono>) => {
     const v = e[field];
-    if (v === null || v === undefined) return unavailable.has(field) ? <Unavailable label="not provided by source" /> : <span className="text-fg-2">n/a</span>;
+    if (v === null || v === undefined)
+      return unavailable.has(field) ? <Unavailable label="not provided by source" /> : <span className="text-fg-2">n/a</span>;
     return render(v);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <section>
-        <div className="text-[13px] text-fg-0">{e.summary}</div>
-        <Mono className="text-[11px] text-fg-2">{e.id}</Mono>
+        <div className="text-[14px] leading-6 font-medium text-fg-0">{e.summary}</div>
+        <div className="mt-1 flex items-start gap-1">
+          <Mono className="min-w-0 pt-1 text-[11px] text-fg-2">{e.id}</Mono>
+          <CopyButton value={e.id} label="Copy id" className="shrink-0" />
+        </div>
       </section>
 
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5">
         <Row k="Time">
           <Time iso={e.timestamp} />
         </Row>
@@ -104,9 +116,15 @@ function EventBody({ event: e, correlations, onSelect }: { event: Event; correla
         <Row k="Process name">{val("process_name")}</Row>
         <Row k="Tool">{val("tool_name")}</Row>
         <Row k="Tool use id">{val("tool_use_id")}</Row>
-        <Row k="Attribution">{val("attribution_confidence", (v) => <Badge tone={v === "low" ? "unknown" : "neutral"}>{String(v)}</Badge>)}</Row>
+        <Row k="Attribution">
+          {val("attribution_confidence", (v) => (
+            <Badge tone={v === "low" ? "unknown" : "neutral"}>{String(v)}</Badge>
+          ))}
+        </Row>
         <Row k="Capture">
-          <Badge tone={e.collection_status === "complete" ? "neutral" : e.collection_status === "error" ? "risk" : "warn"}>{e.collection_status}</Badge>
+          <Badge tone={e.collection_status === "complete" ? "neutral" : e.collection_status === "error" ? "risk" : "warn"}>
+            {e.collection_status}
+          </Badge>
         </Row>
       </dl>
 
@@ -141,7 +159,7 @@ function EventBody({ event: e, correlations, onSelect }: { event: Event; correla
             {correlations.map((c) => {
               const other = e.id === c.reported_event_id ? c.observed_event_id : c.reported_event_id;
               return (
-                <li key={c.id} className="rounded-[3px] border border-dashed border-line-strong p-2">
+                <li key={c.id} className="rounded-sm border border-dashed border-line-strong p-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Badge tone="neutral">derived</Badge>
                     <CorrelationBadge match={c.match} />
@@ -163,7 +181,7 @@ function EventBody({ event: e, correlations, onSelect }: { event: Event; correla
       {e.raw_summary ? (
         <section>
           <div className="label mb-1">Raw record summary (redacted)</div>
-          <pre className="overflow-x-auto rounded-[3px] border border-line bg-surface-0 p-2 font-mono text-[11px] whitespace-pre-wrap text-fg-1">{e.raw_summary}</pre>
+          <CodeBlock code={e.raw_summary} wrap maxHeight="16rem" />
         </section>
       ) : null}
 
@@ -172,7 +190,7 @@ function EventBody({ event: e, correlations, onSelect }: { event: Event; correla
         {e.evidence_id ? (
           <EvidenceBlock evidenceId={e.evidence_id} currentEventId={e.id} onSelect={onSelect} />
         ) : (
-          <div className="hatch rounded-[3px] px-2 py-1.5 text-unknown">No evidence record is attached to this event.</div>
+          <div className="hatch rounded-sm px-2 py-1.5 text-unknown">No evidence record is attached to this event.</div>
         )}
       </section>
     </div>
@@ -187,13 +205,13 @@ function EvidenceBlock({ evidenceId, currentEventId, onSelect }: { evidenceId: s
   const im = ev.integrity_metadata;
 
   return (
-    <div className="space-y-3 rounded-[3px] border border-line bg-surface-2 p-2">
+    <div className="space-y-3 rounded-md border border-line bg-surface-1 p-3">
       <div className="flex flex-wrap items-center gap-1.5">
         <Mono className="text-fg-1">{ev.id}</Mono>
         <FixtureBadge isFixture={ev.is_fixture} />
         <RedactionBadge status={ev.redaction_status} />
       </div>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5">
         <Row k="Type">{humanize(ev.source_type)}</Row>
         <Row k="Reference">
           <Mono>{ev.source_reference}</Mono>
@@ -201,7 +219,16 @@ function EvidenceBlock({ evidenceId, currentEventId, onSelect }: { evidenceId: s
         <Row k="Captured">
           <Time iso={ev.timestamp} />
         </Row>
-        <Row k="SHA-256">{im.sha256 ? <Mono className="text-fg-1">{im.sha256}</Mono> : <Unavailable label="not computed" />}</Row>
+        <Row k="SHA-256">
+          {im.sha256 ? (
+            <span className="flex items-start gap-1">
+              <Mono className="min-w-0 pt-1 text-fg-1">{im.sha256}</Mono>
+              <CopyButton value={im.sha256} label="Copy" className="shrink-0" />
+            </span>
+          ) : (
+            <Unavailable label="not computed" />
+          )}
+        </Row>
         <Row k="Size">{im.size_bytes !== null ? <Mono>{im.size_bytes} bytes</Mono> : <span className="text-fg-2">unknown</span>}</Row>
         <Row k="Captured by">{im.captured_by ? <Mono>{im.captured_by}</Mono> : <span className="text-fg-2">not recorded</span>}</Row>
         {im.note ? <Row k="Integrity note">{im.note}</Row> : null}
@@ -209,9 +236,9 @@ function EvidenceBlock({ evidenceId, currentEventId, onSelect }: { evidenceId: s
       <div>
         <div className="label mb-1">Excerpt</div>
         {ev.excerpt !== null ? (
-          <pre className="max-h-80 overflow-auto rounded-[3px] border border-line bg-surface-0 p-2 font-mono text-[11px] whitespace-pre-wrap text-fg-0">{ev.excerpt}</pre>
+          <CodeBlock code={ev.excerpt} wrap maxHeight="20rem" />
         ) : (
-          <div className="hatch rounded-[3px] px-2 py-1.5 text-unknown">
+          <div className="hatch rounded-sm px-2 py-1.5 text-unknown">
             {ev.redaction_status === "withheld" ? "Excerpt withheld by redaction policy." : "No excerpt captured."}
           </div>
         )}

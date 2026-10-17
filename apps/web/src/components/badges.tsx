@@ -22,30 +22,57 @@ import {
   type VerificationResult,
 } from "@kw/schema";
 import { humanize } from "../lib/format";
+import { Icon, type IconName } from "./ds/Icon";
 
 export type Tone = "neutral" | "muted" | "risk" | "risk-solid" | "warn" | "verified" | "unknown" | "reported" | "observed" | "focus";
 
 const TONE_CLASS: Record<Tone, string> = {
   neutral: "border-line-strong bg-surface-2 text-fg-0",
   muted: "border-line bg-transparent text-fg-2",
-  risk: "border-risk/55 bg-risk/16 text-risk",
+  risk: "border-risk/50 bg-risk/12 text-risk",
   "risk-solid": "border-risk-solid bg-risk-solid text-white",
-  warn: "border-warn/50 bg-warn/16 text-warn",
-  verified: "border-verified/50 bg-verified/16 text-verified",
+  warn: "border-warn/45 bg-warn/12 text-warn",
+  verified: "border-verified/45 bg-verified/12 text-verified",
   unknown: "hatch text-unknown",
-  reported: "border-reported/50 bg-reported/16 text-reported",
-  observed: "border-observed/50 bg-observed/16 text-observed",
-  focus: "border-focus/50 bg-focus/16 text-focus",
+  reported: "border-reported/45 bg-reported/12 text-reported",
+  observed: "border-observed/45 bg-observed/12 text-observed",
+  focus: "border-focus/45 bg-focus/12 text-focus",
 };
 
-export function Badge({ tone = "neutral", children, title, mono }: { tone?: Tone; children: ReactNode; title?: string; mono?: boolean }) {
+/** Symbol paired with tone so status is never colour-only (decorative; the text label carries the meaning). */
+const TONE_ICON: Partial<Record<Tone, IconName>> = {
+  risk: "alert",
+  "risk-solid": "alert",
+  warn: "alertCircle",
+  verified: "check",
+  unknown: "question",
+  reported: "quote",
+  observed: "eye",
+};
+
+export function Badge({
+  tone = "neutral",
+  children,
+  title,
+  mono,
+  icon,
+}: {
+  tone?: Tone;
+  children: ReactNode;
+  title?: string;
+  mono?: boolean;
+  /** Override the tone's default symbol, or pass false to hide it. */
+  icon?: IconName | false;
+}) {
+  const sym = icon === false ? undefined : (icon ?? TONE_ICON[tone]);
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[3px] border px-1.5 py-px text-[11px] leading-4 font-medium ${
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[5px] border px-1.5 py-px text-[11px] leading-4 font-medium ${
         mono ? "font-mono" : ""
       } ${TONE_CLASS[tone]}`}
     >
+      {sym ? <Icon name={sym} size={10} /> : null}
       {children}
     </span>
   );
@@ -57,7 +84,7 @@ export function FixtureBadge({ isFixture, compact }: { isFixture: boolean; compa
   return (
     <span
       title="Fixture data: hand-authored sample loaded with `pnpm seed:fixtures`. Not captured from a live agent run."
-      className="inline-flex shrink-0 items-center rounded-[3px] bg-fg-0 px-1.5 py-px font-mono text-[10px] leading-4 font-bold tracking-wider text-surface-0"
+      className="inline-flex shrink-0 items-center rounded-[4px] bg-fg-0 px-1.5 py-px font-mono text-[10px] leading-4 font-bold tracking-wider text-surface-0"
     >
       {compact ? "FX" : "FIXTURE"}
     </span>
@@ -202,7 +229,7 @@ export function TriState({ value, yes = "yes", no = "no" }: { value: boolean | n
 
 /** Inline rendering of a field the source could not provide. */
 export const Unavailable = ({ label = "not available" }: { label?: string }) => (
-  <span className="hatch inline-block rounded-[2px] px-1 text-[11px] text-unknown">{label}</span>
+  <span className="hatch inline-block rounded-[4px] px-1 text-[11px] text-unknown">{label}</span>
 );
 
 /**

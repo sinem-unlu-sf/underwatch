@@ -1,17 +1,14 @@
 import type { DataMode } from "@kw/schema";
-import { NavLink, Outlet } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Outlet, useLocation } from "react-router";
 import { useAuthCheck, useSettingsStatus } from "../api/queries";
-import { ApiRequestError, isPermissionDenied } from "../api/client";
+import { isPermissionDenied } from "../api/client";
 import { Cmd, PermissionDenied } from "./states";
-import { AskWitnessDrawerProvider, AskWitnessLauncher } from "./askwitness/AskWitnessDrawer";
-
-const NAV = [
-  { to: "/", label: "Overview", end: true },
-  { to: "/runs", label: "Agent Runs", end: false },
-  { to: "/findings", label: "Findings", end: false },
-  { to: "/safeguards", label: "Safeguards", end: false },
-  { to: "/settings", label: "Settings", end: false },
-] as const;
+import { AskWitnessDrawerProvider } from "./askwitness/AskWitnessDrawer";
+import { CommandPalette } from "./shell/CommandPalette";
+import { rememberSectionSearch } from "./shell/nav";
+import { Sidebar, useSidebarState } from "./shell/Sidebar";
+import { TopBar, WorkspaceIndicator } from "./shell/TopBar";
 
 export function Layout() {
   return (
@@ -22,42 +19,48 @@ export function Layout() {
 }
 
 function LayoutShell() {
+  const location = useLocation();
+  // Remember each section's list filters (they live in the URL) so the sidebar returns to the same context.
+  rememberSectionSearch(location.pathname, location.search);
+  const sidebar = useSidebarState();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="flex h-full min-h-0">
-      <aside className="flex w-[196px] shrink-0 flex-col border-r border-line bg-surface-1">
-        <div className="border-b border-line px-4 py-3">
-          <div className="font-mono text-[13px] font-bold tracking-tight text-fg-0">kernel-witness</div>
-          <div className="text-[11px] text-fg-2">agent behavior verification</div>
-        </div>
-        <nav aria-label="Primary" className="flex flex-col py-2">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `border-l-2 px-4 py-1.5 text-[13px] no-underline ${
-                  isActive ? "border-fg-0 bg-surface-2 font-medium text-fg-0" : "border-transparent text-fg-1 hover:bg-surface-2 hover:text-fg-0"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="mt-auto border-t border-line px-4 py-3 text-[11px] text-fg-2">
-          API <span className="font-mono">127.0.0.1:4600</span>
-          <br />
-          local only
-        </div>
-      </aside>
+      <Sidebar
+        state={sidebar}
+        footer={
+          <>
+            {sidebar.narrow ? (
+              <div className="mb-2 -ml-2">
+                <WorkspaceIndicator />
+              </div>
+            ) : null}
+            API <span className="font-mono">127.0.0.1:4600</span> · local only
+          </>
+        }
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
-        <main className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <TopBar sidebar={sidebar} onOpenSearch={() => setSearchOpen(true)} />
+        <ContextStrip />
+        <main id="kw-main" className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6">
           <AuthGate />
         </main>
       </div>
+      <CommandPalette open={searchOpen} onClose={closeSearch} />
     </div>
   );
 }
@@ -69,40 +72,28 @@ function AuthGate() {
   return <Outlet />;
 }
 
-function TopBar() {
+/** Compact strip under the top bar: the FIXTURE DATA banner (when present) and the local-build honesty note, one row. */
+function ContextStrip() {
   const settings = useSettingsStatus();
   return (
-    <div className="shrink-0 border-b border-line bg-surface-1">
-      <div className="flex flex-wrap items-center gap-2 px-5 py-2">
-        <span
-          className="hatch inline-flex items-center rounded-[3px] px-2 py-0.5 text-[11px] text-unknown"
-          title="Local build. Integration status (ai&, verification harness, observers, Neo4j) is reported on the Settings page; unavailable parts are shown as unavailable, never simulated."
-        >
-          Local build: AI is advisory and optional; see Settings for what is connected
-        </span>
-        <div className="ml-auto flex items-center gap-2 text-[11px]">
-          <AskWitnessLauncher />
-          <ApiIndicator ok={settings.isSuccess} pending={settings.isPending} error={settings.error} />
-        </div>
-      </div>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface-1 px-4 py-1 text-[11px] sm:px-6">
       {settings.data ? <DataModeBanner mode={settings.data.data_mode} /> : null}
+      <span
+        className="hatch ml-auto inline-flex items-center rounded-sm px-1.5 py-px text-unknown"
+        title="Local build. Integration status (ai&, verification harness, observers, Neo4j) is reported on the Settings page; unavailable parts are shown as unavailable, never simulated."
+      >
+        Local build: AI is advisory and optional; see Settings for what is connected
+      </span>
     </div>
   );
-}
-
-function ApiIndicator({ ok, pending, error }: { ok: boolean; pending: boolean; error: unknown }) {
-  if (pending) return <span className="text-fg-2">API: checking…</span>;
-  if (ok) return <span className="text-fg-1">API: responding</span>;
-  const unreachable = error instanceof ApiRequestError && error.kind === "unreachable";
-  return <span className="text-warn">{unreachable ? "API: not reachable" : "API: error"}</span>;
 }
 
 export function DataModeBanner({ mode }: { mode: DataMode }) {
   if (!mode.contains_fixture_data) return null;
   const onlyFixtures = mode.live_runs === 0;
   return (
-    <div role="status" className="flex flex-wrap items-center gap-2 border-t border-line bg-surface-2 px-5 py-1.5 text-[12px] text-fg-1">
-      <span className="rounded-[3px] bg-fg-0 px-1.5 py-px font-mono text-[10px] font-bold tracking-wider text-surface-0">FIXTURE DATA</span>
+    <div role="status" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-fg-1">
+      <span className="rounded-sm bg-fg-0 px-1.5 py-px font-mono text-[10px] font-bold tracking-wider text-surface-0">FIXTURE DATA</span>
       {onlyFixtures ? (
         <span>
           All {mode.fixture_runs} run{mode.fixture_runs === 1 ? "" : "s"} shown are hand-authored fixtures, not live captures. No live run

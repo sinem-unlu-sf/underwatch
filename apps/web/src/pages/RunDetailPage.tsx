@@ -1,12 +1,4 @@
-import {
-  EventBasis,
-  EventType,
-  FINDING_STATUS_LABELS,
-  FindingStatus,
-  Outcome,
-  type RunDetailResponse,
-  type RunEventsQueryInput,
-} from "@kw/schema";
+import { EventBasis, EventType, FINDING_STATUS_LABELS, FindingStatus, Outcome, type RunDetailResponse, type RunEventsQueryInput } from "@kw/schema";
 import { useCallback, useMemo } from "react";
 import { Link, useParams } from "react-router";
 import { useRun, useRunEvents, useRunFindings } from "../api/queries";
@@ -18,12 +10,21 @@ import { CoveragePanel } from "../components/run/CoveragePanel";
 import { SupervisedRunPanel } from "../components/run/StartSupervisedRun";
 import { EventInspector } from "../components/run/EventInspector";
 import { Timeline } from "../components/run/Timeline";
+import { Button } from "../components/ds/Button";
+import { Icon } from "../components/ds/Icon";
+import { Section } from "../components/ds/Section";
 import { EmptyState, ErrorState, PageSkeleton, SkeletonRows } from "../components/states";
-import { KeyValue, Mono, PageHeader, Panel, Time } from "../components/ui";
+import { KeyValue, Mono, PageHeader, Time } from "../components/ui";
 import { formatDuration, humanize } from "../lib/format";
 import { pickEnum, useUrlFilters } from "../lib/searchParams";
 
 const EVENT_FILTER_KEYS = ["event_type", "outcome", "process_id", "finding_id", "basis"];
+const JUMPS: Array<[string, string]> = [
+  ["run-overview", "Summary"],
+  ["run-coverage", "Coverage & policy"],
+  ["findings", "Findings"],
+  ["timeline", "Timeline"],
+];
 
 export function RunDetailPage() {
   const { id = "" } = useParams();
@@ -65,7 +66,15 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
 
   const selectedId = get("event") ?? null;
   const select = useCallback((eventId: string) => set({ event: eventId, offset: undefined }, { replace: true }), [set]);
-  const closeInspector = useCallback(() => set({ event: undefined, offset: undefined }, { replace: true }), [set]);
+  const closeInspector = useCallback(() => {
+    const prev = get("event");
+    set({ event: undefined, offset: undefined }, { replace: true });
+    // Return keyboard focus to the timeline card that opened the inspector, so closing keeps the user's place.
+    if (prev && typeof window !== "undefined")
+      window.requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(prev)}"] button`)?.focus({ preventScroll: true }),
+      );
+  }, [get, set]);
 
   const processOptions = useMemo(() => {
     const m = new Map<number, string | null>();
@@ -92,20 +101,33 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
         subtitle={
           <span className="flex flex-wrap items-center gap-x-3">
             <Mono>{run.id}</Mono>
-            <Link to="/runs" className="text-fg-1 hover:underline">
-              all runs
+            <Link to="/runs" className="inline-flex items-center gap-1 text-fg-1 hover:text-fg-0 hover:underline">
+              <Icon name="chevronRight" size={11} className="rotate-180" /> all runs
             </Link>
           </span>
         }
         actions={
-          <button type="button" className="btn" aria-haspopup="dialog" onClick={() => askWitness.open({ scope: "run", runId })}>
+          <Button icon="quote" aria-haspopup="dialog" onClick={() => askWitness.open({ scope: "run", runId })}>
             Ask about this run
-          </button>
+          </Button>
         }
       />
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Panel title="Run summary">
+      <nav aria-label="On this page" className="-mt-2 mb-6 flex flex-wrap items-center gap-1 text-[12px]">
+        {JUMPS.map(([target, label]) => (
+          <button
+            key={target}
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => document.getElementById(target)?.scrollIntoView({ block: "start" })}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div id="run-overview" className="grid scroll-mt-16 gap-x-10 gap-y-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Section title="Run summary" description="Recorded metadata and counts for this session.">
           <KeyValue
             items={[
               ["Agent", run.agent_type === "claude_code" ? "Claude Code" : run.agent_type],
@@ -151,94 +173,109 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
               ],
             ]}
           />
-        </Panel>
-        <Panel title="Task">
-          <p className="whitespace-pre-wrap text-fg-0">{run.task_description || <span className="text-fg-2">No task description recorded.</span>}</p>
-        </Panel>
+        </Section>
+        <Section title="Task" description="What the agent was asked to do, as recorded.">
+          <p className="rounded-md border border-line bg-surface-1 p-3 font-mono text-[12.5px] leading-5 whitespace-pre-wrap text-fg-0">
+            {run.task_description || <span className="font-sans text-fg-2">No task description recorded.</span>}
+          </p>
+        </Section>
       </div>
 
-      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div id="run-coverage" className="mt-8 grid scroll-mt-16 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <CoveragePanel coverage={coverage} runLevel={run.coverage_status} />
         <PolicyPanel policy={policy} title="Applicable policy" />
       </div>
       {detail.supervised ? <SupervisedRunPanel sr={detail.supervised} /> : null}
 
-      <Panel
-        className="mt-3"
+      <Section
+        className="mt-8"
         title={`Findings${findings.data ? ` (${findings.data.total})` : ""}`}
-        bodyClassName=""
+        description="Discrepancies Kernel Witness derived from this run's evidence."
         id="findings"
       >
-        {findings.isPending ? (
-          <SkeletonRows rows={3} cols={6} />
-        ) : findings.isError ? (
-          <ErrorState error={findings.error} what="findings for this run" />
-        ) : findings.data.items.length === 0 ? (
-          <EmptyState title="No findings for this run">
-            No discrepancy has been recorded for this run. That is a statement about recorded findings, not proof of correct behavior; check the
-            coverage panel for what was observable.
-          </EmptyState>
-        ) : (
-          <FindingsTable findings={findings.data.items} showRun={false} onFilterTimeline={(fid) => set({ finding_id: fid })} />
-        )}
-      </Panel>
+        <div className="overflow-clip rounded-md border border-line bg-surface-1">
+          {findings.isPending ? (
+            <SkeletonRows rows={3} cols={6} />
+          ) : findings.isError ? (
+            <ErrorState error={findings.error} what="findings for this run" />
+          ) : findings.data.items.length === 0 ? (
+            <EmptyState title="No findings for this run">
+              No discrepancy has been recorded for this run. That is a statement about recorded findings, not proof of correct behavior; check the
+              coverage panel for what was observable.
+            </EmptyState>
+          ) : (
+            <FindingsTable findings={findings.data.items} showRun={false} onFilterTimeline={(fid) => set({ finding_id: fid })} />
+          )}
+        </div>
+      </Section>
 
-      <Panel
-        className="mt-3"
+      <Section
+        className="mt-8"
         id="timeline"
         title={`Event timeline${events.data ? ` (${events.data.total}${filtered ? " matching" : ""})` : ""}`}
-        aside={<span className="text-[11px]">reported vs independently observed</span>}
-        bodyClassName=""
+        description="Agent-reported vs independently observed, on one time axis. Select an event to inspect its evidence."
       >
-        <div className="flex flex-wrap items-end gap-3 border-b border-line p-3">
-          <FilterSelect
-            label="Event type"
-            value={eventQuery.event_type}
-            onChange={(v) => set({ event_type: v })}
-            options={EventType.options.map((t) => [t, t])}
-          />
-          <FilterSelect label="Outcome" value={eventQuery.outcome} onChange={(v) => set({ outcome: v })} options={Outcome.options.map((o) => [o, o])} />
-          <FilterSelect
-            label="Process"
-            value={eventQuery.process_id !== undefined ? String(eventQuery.process_id) : undefined}
-            onChange={(v) => set({ process_id: v })}
-            options={processOptions.map(([pid, name]) => [String(pid), `${pid}${name ? ` ${name}` : ""}`])}
-          />
-          <FilterSelect
-            label="Finding"
-            value={eventQuery.finding_id}
-            onChange={(v) => set({ finding_id: v })}
-            options={(findings.data?.items ?? []).map((f) => [f.id, f.title.length > 48 ? `${f.title.slice(0, 47)}…` : f.title])}
-          />
-          <FilterSelect label="Lane" value={eventQuery.basis} onChange={(v) => set({ basis: v })} options={EventBasis.options.map((b) => [b, humanize(b)])} />
-          {filtered ? (
-            <button type="button" className="btn" onClick={() => clear(EVENT_FILTER_KEYS)}>
-              Clear filters
-            </button>
-          ) : null}
-        </div>
-        {events.isPending ? (
-          <SkeletonRows rows={8} cols={3} />
-        ) : events.isError ? (
-          <ErrorState error={events.error} what="events" />
-        ) : events.data.items.length === 0 ? (
-          filtered ? (
-            <EmptyState title="No events match these filters" />
+        <div className="overflow-clip rounded-md border border-line bg-surface-1">
+          <div className="flex flex-wrap items-end gap-3 border-b border-line p-3">
+            <FilterSelect
+              label="Event type"
+              value={eventQuery.event_type}
+              onChange={(v) => set({ event_type: v })}
+              options={EventType.options.map((t) => [t, t])}
+            />
+            <FilterSelect
+              label="Outcome"
+              value={eventQuery.outcome}
+              onChange={(v) => set({ outcome: v })}
+              options={Outcome.options.map((o) => [o, o])}
+            />
+            <FilterSelect
+              label="Process"
+              value={eventQuery.process_id !== undefined ? String(eventQuery.process_id) : undefined}
+              onChange={(v) => set({ process_id: v })}
+              options={processOptions.map(([pid, name]) => [String(pid), `${pid}${name ? ` ${name}` : ""}`])}
+            />
+            <FilterSelect
+              label="Finding"
+              value={eventQuery.finding_id}
+              onChange={(v) => set({ finding_id: v })}
+              options={(findings.data?.items ?? []).map((f) => [f.id, f.title.length > 48 ? `${f.title.slice(0, 47)}…` : f.title])}
+            />
+            <FilterSelect
+              label="Lane"
+              value={eventQuery.basis}
+              onChange={(v) => set({ basis: v })}
+              options={EventBasis.options.map((b) => [b, humanize(b)])}
+            />
+            {filtered ? (
+              <button type="button" className="btn btn-ghost" onClick={() => clear(EVENT_FILTER_KEYS)}>
+                <Icon name="x" size={13} /> Clear filters
+              </button>
+            ) : null}
+          </div>
+          {events.isPending ? (
+            <SkeletonRows rows={8} cols={3} />
+          ) : events.isError ? (
+            <ErrorState error={events.error} what="events" />
+          ) : events.data.items.length === 0 ? (
+            filtered ? (
+              <EmptyState title="No events match these filters" />
+            ) : (
+              <EmptyState title="No events recorded for this run">
+                Nothing was captured, or no collector was active. See the coverage panel; an empty timeline is not evidence that nothing happened.
+              </EmptyState>
+            )
           ) : (
-            <EmptyState title="No events recorded for this run">
-              Nothing was captured, or no collector was active. See the coverage panel; an empty timeline is not evidence that nothing happened.
-            </EmptyState>
-          )
-        ) : (
-          <Timeline
-            events={events.data.items}
-            correlations={events.data.correlations}
-            findings={findings.data?.items ?? []}
-            selectedId={selectedId}
-            onSelect={select}
-          />
-        )}
-      </Panel>
+            <Timeline
+              events={events.data.items}
+              correlations={events.data.correlations}
+              findings={findings.data?.items ?? []}
+              selectedId={selectedId}
+              onSelect={select}
+            />
+          )}
+        </div>
+      </Section>
 
       {selectedId ? (
         <EventInspector
@@ -266,7 +303,7 @@ function FilterSelect({
   options: Array<[string, string]>;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex min-w-0 flex-col gap-1">
       <span className="label">{label}</span>
       <select className="field max-w-[260px]" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">All</option>

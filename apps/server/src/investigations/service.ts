@@ -2,7 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCOPED_PROMPT_VERSION, type AskWitnessHistoryEntry, type InferenceResult } from "@kw/inference";
 import { safeRedact } from "@kw/redaction";
 import {
+  actionRecordsFromItems,
   checkAskWitnessOutput,
+  flagUnconfirmedActionClaims,
+  type ActionClaimFlag,
   type AskWitnessAnswer,
   type AskWitnessBody,
   type AskWitnessModelOutput,
@@ -17,6 +20,7 @@ import type { ServerContext } from "../context";
 import { transaction } from "../db/connection";
 import { processRedactionOptions } from "../ingest/sanitize";
 import { ApiHttpError, notFound } from "../errors";
+import { getFindingBrief } from "../findings-brief/brief";
 import { requireFinding } from "../repo/findings";
 import { requireRun } from "../repo/runs";
 import { forRun, forWorkspace, type ScopedBundleResult } from "../services/scope-retriever";
@@ -34,9 +38,61 @@ import {
   type TurnRecord,
 } from "./store";
 
-/** sha256(finding US investigation-or-empty US question): same client_request_id + different request => 409. */
-export function requestFingerprint(findingId: string, investigationId: string | undefined, question: string): string {
-  return createHash("sha256").update(`${findingId}\u001f${investigationId ?? ""}\u001f${question}`, "utf8").digest("hex");
+/**
+ * sha256(finding US investigation-or-empty US question [US depth US style]): same client_request_id + different request
+ * => 409. The mode suffix is added only for non-default depth/style so fingerprints of v2 requests are unchanged.
+ */
+export function requestFingerprint(findingId: string, investigationId: string | undefined, question: string, mode?: Pick<AskWitnessBody, "depth" | "style">): string {
+  const depth = mode?.depth ?? "concise";
+  const style = mode?.style ?? "standard";
+  const suffix = depth === "concise" && style === "standard" ? "" : `\u001f${depth}\u001f${style}`;
+  return createHash("sha256").update(`${findingId}\u001f${investigationId ?? ""}\u001f${question}${suffix}`, "utf8").digest("hex");
+}
+
+/**
+ * Addendum C: the finding's deterministic brief (GET /api/findings/:id `brief`), projected to what helps phrasing and
+ * redacted string by string before it can reach ai&. It is a presentation of the same records, not evidence; the
+ * prompt marks it non-citable. Any failure means no brief (the bundle alone is sent), never a failed question.
+ */
+export function briefForPrompt(ctx: ServerContext, findingId: string): Record<string, unknown> | null {
+  try {
+    const b = getFindingBrief(ctx.db, findingId);
+    const opts = processRedactionOptions(ctx.env);
+    const clean = (v: unknown): unknown =>
+      typeof v === "string" ? safeRedact(v, opts).text : Array.isArray(v) ? v.map(clean) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v;
+    return clean({
+      brief_version: b.brief_version,
+      is_fixture: b.is_fixture,
+      problem: b.problem,
+      why_it_matters: b.why_it_matters,
+      terms: b.terms,
+      how_to_fix: b.how_to_fix.map((a) => ({ text: a.text, mechanism: a.mechanism, enforces: a.enforces, mechanism_limit: a.mechanism_limit, status: a.status, status_label: a.status_label, status_basis: a.status_basis })),
+      evidence_summary: { text: b.evidence_summary.text, coverage_level: b.evidence_summary.coverage_level, coverage_caveats: b.evidence_summary.coverage_caveats },
+      uncertainty: b.uncertainty,
+    }) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** Addendum C: requested answer mode (defaults concise / standard). */
+function answerMode(body: AskWitnessBody): { depth: NonNullable<AskWitnessBody["depth"]>; style: NonNullable<AskWitnessBody["style"]> } {
+  return { depth: body.depth ?? "concise", style: body.style ?? "standard" };
+}
+
+/**
+ * Addendum C: flags AI sentences that claim an action was performed / applied / tested / verified / fixed while no
+ * record in the bundle that was sent confirms it, and adds an app-written limitation line. Deterministic.
+ */
+export function withActionClaimCheck(answer: AskWitnessAnswer, items: Parameters<typeof actionRecordsFromItems>[0]): AskWitnessAnswer {
+  const flags: ActionClaimFlag[] = flagUnconfirmedActionClaims(answer, actionRecordsFromItems(items));
+  const limitations = [...(answer.evidence_limitations ?? [])];
+  if (flags.length > 0) {
+    limitations.push(
+      `${flags.length} AI statement(s) say an action was performed, applied, tested, verified or fixed, but no Kernel Witness record in the evidence sent confirms it; they are flagged as unconfirmed.`,
+    );
+  }
+  return { ...answer, evidence_limitations: limitations, action_claim_flags: flags };
 }
 
 type Failure = Exclude<InferenceResult<AskWitnessModelOutput>, { status: "ok" }>;
@@ -190,10 +246,11 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
       onFailure: ({ error }) => console.error(`[kw] redaction failed for an Ask Witness question (${error}); stored [REDACTION_FAILED]`),
     }).text;
     const ev = await ctx.services.evidence.forFinding(findingId, question);
+    const mode = answerMode(body);
 
     let result: InferenceResult<AskWitnessModelOutput>;
     try {
-      result = await ctx.inference.askWitness(question, ev.bundle, history);
+      result = await ctx.inference.askWitness(question, ev.bundle, history, { ...mode, brief: briefForPrompt(ctx, findingId) });
     } catch {
       result = { status: "error", http_status: null, detail: "provider threw", meta: { provider: ctx.inference.id, model: ctx.inference.model } as never };
     }
@@ -203,7 +260,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
     let error: InvestigationTurn["error"] = null;
     if (result.status === "ok") {
       const checked = checkAskWitnessOutput(result.value, ev.bases);
-      answerValue = { ...checked, evidence_limitations: evidenceLimitations(ev, checked, result.value.insufficient_evidence) };
+      answerValue = withActionClaimCheck({ ...checked, evidence_limitations: evidenceLimitations(ev, checked, result.value.insufficient_evidence) }, ev.bundle.items);
       status = answerValue.insufficient_evidence ? "insufficient_evidence" : "answered";
     } else {
       ({ status, error } = failureToTurn(result));
@@ -226,6 +283,8 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
       error,
       evidence_index: ev.refs,
       created_at: at,
+      depth: mode.depth,
+      style: mode.style,
     };
     try {
       const inv = transaction(ctx.db, () => {
@@ -240,7 +299,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
           current = { ...current, updated_at: at };
         }
         // retrieval: graph traversal vs relational fallback (and why), kept with the turn for audit.
-        insertTurn(ctx.db, turn, { ...(meta ?? {}), retrieval: ev.retrieval });
+        insertTurn(ctx.db, turn, { ...(meta ?? {}), retrieval: ev.retrieval, answer_mode: mode });
         return current;
       });
       if (inv) return { investigation: inv, turn: publicTurn(turn), evidence_index: turn.evidence_index, replayed: false };
@@ -271,10 +330,11 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
       onFailure: ({ error }) => console.error(`[kw] redaction failed for an Ask Witness question (${error}); stored [REDACTION_FAILED]`),
     }).text;
     const ev = scope.kind === "run" ? forRun(ctx, scope.id) : forWorkspace(ctx, question);
+    const mode = answerMode(body);
 
     let result: InferenceResult<AskWitnessModelOutput>;
     try {
-      result = await ctx.inference.askWitness(question, ev.bundle, history);
+      result = await ctx.inference.askWitness(question, ev.bundle, history, mode);
     } catch {
       result = { status: "error", http_status: null, detail: "provider threw", meta: { provider: ctx.inference.id, model: ctx.inference.model } as never };
     }
@@ -283,7 +343,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
     let error: InvestigationTurn["error"] = null;
     if (result.status === "ok") {
       const checked = checkAskWitnessOutput(result.value, ev.bases);
-      answerValue = { ...checked, evidence_limitations: scopedLimitations(ev, checked, result.value.insufficient_evidence) };
+      answerValue = withActionClaimCheck({ ...checked, evidence_limitations: scopedLimitations(ev, checked, result.value.insufficient_evidence) }, ev.bundle.items);
       status = answerValue.insufficient_evidence ? "insufficient_evidence" : "answered";
     } else {
       ({ status, error } = failureToTurn(result));
@@ -306,6 +366,8 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
       error,
       evidence_index: ev.refs,
       created_at: at,
+      depth: mode.depth,
+      style: mode.style,
     };
     try {
       const inv = transaction(ctx.db, () => {
@@ -327,7 +389,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
           touchInvestigation(ctx.db, current.id, at);
           current = { ...current, updated_at: at };
         }
-        insertTurn(ctx.db, turn, { ...(meta ?? {}), retrieval: { retriever: "scoped", scope: { kind: scope.kind, id: scope.id }, selection: ev.selection } });
+        insertTurn(ctx.db, turn, { ...(meta ?? {}), retrieval: { retriever: "scoped", scope: { kind: scope.kind, id: scope.id }, selection: ev.selection }, answer_mode: mode });
         return current;
       });
       if (inv) return { investigation: inv, turn: publicTurn(turn), evidence_index: turn.evidence_index, replayed: false };
@@ -362,13 +424,13 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
   return {
     async askRun(runId, body, _actor) {
       const scope: ScopeRef = { kind: "run", id: runId };
-      const fingerprint = requestFingerprint(scopeKey(scope), body.investigation_id, body.question);
+      const fingerprint = requestFingerprint(scopeKey(scope), body.investigation_id, body.question, body);
       return idempotent(body, fingerprint, () => answerScoped(scope, body, fingerprint));
     },
 
     async askWorkspace(body, _actor) {
       const scope: ScopeRef = { kind: "workspace", id: null };
-      const fingerprint = requestFingerprint(scopeKey(scope), body.investigation_id, body.question);
+      const fingerprint = requestFingerprint(scopeKey(scope), body.investigation_id, body.question, body);
       return idempotent(body, fingerprint, () => answerScoped(scope, body, fingerprint));
     },
 
@@ -382,7 +444,7 @@ export function createInvestigationService(ctx: ServerContext): InvestigationSer
     },
 
     async ask(findingId, body, _actor) {
-      const fingerprint = requestFingerprint(findingId, body.investigation_id, body.question);
+      const fingerprint = requestFingerprint(findingId, body.investigation_id, body.question, body);
       const existing = getTurnByRequestId(ctx.db, body.client_request_id);
       if (existing) return replay(existing, fingerprint);
       const pending = inflight.get(body.client_request_id);

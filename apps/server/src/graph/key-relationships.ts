@@ -28,11 +28,11 @@ const MAX_TEXT = 140;
 /** Per-kind caps, in priority order (most important first). */
 const PRIORITY: ReadonlyArray<[KeyRelationshipKind, number]> = [
   ["contradiction", 1],
-  ["origin_chain", 2],
+  ["origin_chain", 1],
   ["policy", 1],
+  ["cross_run", 1],
   ["verification", 2],
   ["safeguard", 1],
-  ["cross_run", 2],
   ["recurrence", 1],
   ["supporting_evidence", 2],
   ["investigation", 1],
@@ -98,7 +98,9 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
   const candidates = new Map<KeyRelationshipKind, KeyRelationship[]>();
   const push = (r: Omit<KeyRelationship, "source"> & { source?: KeyRelationship["source"] }) => {
     const list = candidates.get(r.kind) ?? [];
-    list.push({ ...r, text: clip(r.text, 320), source: r.source ?? itemSource });
+    // Every inferred path says so up front, whatever produced it (never presented as proof).
+    const note = r.basis === "inferred" && !/^Inferred/.test(r.basis_note) ? `Inferred (heuristic or below high confidence), a lead to check, not proof. ${r.basis_note}` : r.basis_note;
+    list.push({ ...r, basis_note: note, text: clip(r.text, 320), source: r.source ?? itemSource });
     candidates.set(r.kind, list);
   };
   const covered = new Set<string>();
@@ -127,7 +129,22 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
   }
 
   // Origin chain: agent tool call -SPAWNED-> process -SPAWNED-> ... -> observed event (insights.ancestry, Neo4j only).
-  for (const a of [...(g.insights?.ancestry ?? [])].sort((x, y) => Number(!!y.origin_tool_call) - Number(!!x.origin_tool_call))) {
+  // One path per originating tool call: prefer resolved origins, then non-exec events (file/network access says more
+  // than the exec itself), then the longest chain.
+  const isExec = (id: string) => str(byId.get(id), "event_type") === "process_exec";
+  const seenOrigins = new Set<string>();
+  const ancestry = [...(g.insights?.ancestry ?? [])].sort(
+    (x, y) =>
+      Number(!!y.origin_tool_call) - Number(!!x.origin_tool_call) ||
+      Number(isExec(x.event_id)) - Number(isExec(y.event_id)) ||
+      y.chain.length - x.chain.length ||
+      x.event_id.localeCompare(y.event_id),
+  );
+  for (const a of ancestry) {
+    if (a.origin_tool_call) {
+      if (seenOrigins.has(a.origin_tool_call.event_id)) continue;
+      seenOrigins.add(a.origin_tool_call.event_id);
+    }
     const ev = byId.get(a.event_id);
     const evSummary = str(ev, "summary") ?? a.event_summary;
     const observer = sourceLabel(ev);
@@ -157,7 +174,7 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
       basis,
       basis_note:
         basis === "inferred"
-          ? "At least one hop is inferred (uncertain correlation or low-confidence process attribution): treat the chain as a hypothesis."
+          ? "Inferred: at least one hop is heuristic (uncertain correlation or low-confidence process attribution), so treat the chain as a hypothesis, not proof."
           : `Weakest hop is ${basis}. Process spawns come from the tracer; the tool-call link comes from Kernel Witness correlation.`,
       steps,
       links: [...(otc ? [eventLink(otc.event_id, "Tool call")] : []), eventLink(a.event_id, "Observed event")],
@@ -178,8 +195,8 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
         id: `kr:policy:${pv.id}:${finding.policy_rule_id ?? "none"}`,
         kind: "policy",
         text: rule
-          ? `Policy ${pv.name} v${pv.version}, rule ${rule.id}, ${verb} ${rule.action} ${rule.resource_pattern} (${inEffect ? "policy in effect for this run" : "policy cited by the finding"}).`
-          : `Finding cites policy ${pv.name} v${pv.version}${finding.policy_rule_id ? ` (rule ${finding.policy_rule_id} is not in that version)` : " (no specific rule recorded)"}${inEffect ? ", the policy in effect for this run" : ""}.`,
+          ? `Policy ${pv.name} (version ${pv.version}), rule ${rule.id}, ${verb} ${rule.action} ${rule.resource_pattern} (${inEffect ? "policy in effect for this run" : "policy cited by the finding"}).`
+          : `Finding cites policy ${pv.name} (version ${pv.version})${finding.policy_rule_id ? ` (rule ${finding.policy_rule_id} is not in that version)` : " (no specific rule recorded)"}${inEffect ? ", the policy in effect for this run" : ""}.`,
         basis,
         basis_note: `${violates ? "VIOLATES link from the graph projection" : "Link from the finding record"}; rule text from the stored policy version. A rule says what is allowed; it does not by itself show the action was blocked.`,
         steps: [step(fid, "Finding", null, null, null), step(pv.id, "PolicyVersion", `${pv.name} v${pv.version}`, violates ? "VIOLATES" : null, violates?.basis ?? null)],
@@ -286,7 +303,8 @@ export function buildKeyRelationships(db: Db, finding: Finding, g: Omit<FindingG
     const observed = n.label === "ObservedEvent";
     const resEdge = g.edges.find((x) => (x.type === "TARGETS" || x.type === "REPORTS") && x.from === n.id && byId.get(x.to)?.label === "Resource");
     const res = resEdge ? byId.get(resEdge.to) : undefined;
-    const resKey = res ? (str(res, "display") ?? res.title) : null;
+    // The event's own target_resource is the readable form (Resource node ids are hashes).
+    const resKey = res ? (str(n, "target_resource") ?? str(res, "display") ?? res.title) : null;
     const steps = [step(fid, "Finding", null, null, null), step(n.id, n.label, str(n, "summary"), "SUPPORTED_BY", e.basis)];
     if (res && resEdge) steps.push(step(res.id, "Resource", resKey, resEdge.type, resEdge.basis));
     const basis = weakestBasis(steps.slice(1).map((s) => s.via_basis));

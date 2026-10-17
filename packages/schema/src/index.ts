@@ -13,4 +13,5 @@ export * from "./outcomes";
 export * from "./graph";
 export * from "./brief";
 export * from "./findings-views";
+export * from "./accounts";
 export type * from "./integrations";

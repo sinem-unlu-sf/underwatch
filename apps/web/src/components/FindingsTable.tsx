@@ -31,9 +31,14 @@ export function FindingsTable({ findings, showRun = true, onFilterTimeline }: { 
                 <ConfidenceBadge confidence={f.confidence} />
               </td>
               <td className="max-w-[420px]">
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <FixtureBadge isFixture={f.is_fixture} />
-                  <Link to={`/findings/${encodeURIComponent(f.id)}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+                  <Link
+                    to={`/findings/${encodeURIComponent(f.id)}`}
+                    title={f.title}
+                    className="min-w-0 truncate font-medium text-fg-0 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {f.title}
                   </Link>
                 </div>
@@ -62,7 +67,7 @@ export function FindingsTable({ findings, showRun = true, onFilterTimeline }: { 
                 <td>
                   <button
                     type="button"
-                    className="btn whitespace-nowrap"
+                    className="btn btn-sm whitespace-nowrap"
                     onClick={(e) => {
                       e.stopPropagation();
                       onFilterTimeline(f.id);

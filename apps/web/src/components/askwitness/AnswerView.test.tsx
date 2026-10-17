@@ -112,7 +112,7 @@ describe("Ask Witness answer rendering", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("ai& request timed out");
     expect(screen.queryByRole("region", { name: "Backed by observed evidence" })).toBeNull();
     await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
-    expect(onRetry).toHaveBeenCalledWith("Did the agent actually access the file?");
+    expect(onRetry).toHaveBeenCalledWith("Did the agent actually access the file?", { depth: "concise", style: "standard" });
   });
 
   it("flags insufficient evidence explicitly", () => {
@@ -131,5 +131,30 @@ describe("Ask Witness answer rendering", () => {
     );
     render(<TurnView turn={turn({ answer: thin, status: "insufficient_evidence" })} ev={{ index, onOpen: () => {} }} />);
     expect(screen.getByText(/Insufficient evidence/)).toBeInTheDocument();
+  });
+
+  it("offers More detail / Explain simply follow-ups with depth/style flags and shows the turn's mode (Addendum C)", async () => {
+    const onFollowUp = vi.fn();
+    render(<TurnView turn={turn({ depth: "concise" })} ev={{ index, onOpen: () => {} }} onFollowUp={onFollowUp} />);
+    expect(screen.getByText("Concise")).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Follow-up on this answer" });
+    const user = userEvent.setup();
+    await user.click(within(group).getByRole("button", { name: "More detail" }));
+    expect(onFollowUp).toHaveBeenLastCalledWith("More detail on: Did the agent actually access the file?", { depth: "detailed", style: "standard" });
+    await user.click(within(group).getByRole("button", { name: "Explain simply" }));
+    expect(onFollowUp).toHaveBeenLastCalledWith("Explain simply: Did the agent actually access the file?", { depth: "concise", style: "simple" });
+  });
+
+  it("renders app-side flags for action claims no record confirms", () => {
+    const flagged = {
+      ...answer,
+      action_claim_flags: [{ location: "summary" as const, claim: "verified" as const, text: "The safeguard has been verified.", reason: "No Kernel Witness record in the evidence sent shows a passed verification." }],
+    };
+    render(<TurnView turn={turn({ answer: flagged, style: "simple", depth: "detailed" })} ev={{ index, onOpen: () => {} }} />);
+    const region = screen.getByRole("region", { name: "Unconfirmed action claims" });
+    expect(region).toHaveTextContent("The safeguard has been verified.");
+    expect(region).toHaveTextContent("No record confirms this verification");
+    expect(screen.getByText("Detailed · simple wording")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Follow-up on this answer" })).toBeNull();
   });
 });

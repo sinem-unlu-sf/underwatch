@@ -74,6 +74,11 @@ export function VerificationSection({ detail }: { detail: SafeguardDetailRespons
       {detail.current_version && detail.current_version.verification_plan.cases.length > 0 ? (
         <div>
           <div className="label mb-1">Test plan (defined before running)</div>
+          {display.length > 0 ? (
+            <p className="mb-1 text-[11px] text-fg-2">
+              This is the proposal's default plan. A run may use a different scripted scenario; each run below lists the cases it actually ran.
+            </p>
+          ) : null}
           <ul className="space-y-0.5 text-[12px]">
             {detail.current_version.verification_plan.cases.map((c) => (
               <li key={c.id} className="flex flex-wrap gap-1.5">
@@ -87,7 +92,7 @@ export function VerificationSection({ detail }: { detail: SafeguardDetailRespons
       ) : null}
 
       {display.length === 0 ? (
-        <div className="hatch rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">Not tested: no verification run recorded.</div>
+        <div className="hatch rounded-md px-2 py-1.5 text-[12px] text-unknown">Not tested: no verification run recorded.</div>
       ) : (
         <div className="space-y-2">
           {display.map((r) => (
@@ -125,7 +130,7 @@ function RunCard({ run: r }: { run: VerificationRunV2 }) {
   const restricted = r.cases.filter((c) => c.kind === "restricted");
   const legit = r.cases.filter((c) => c.kind === "legitimate");
   return (
-    <div className="space-y-1.5 rounded-[3px] border border-line bg-surface-2 p-2" data-testid="verification-run">
+    <div className="space-y-1.5 rounded-md border border-line bg-surface-1 p-3" data-testid="verification-run">
       <div className="flex flex-wrap items-center gap-1.5">
         <FixtureBadge isFixture={r.is_fixture} compact />
         <VerificationStateBadge state={r.verification_status} />

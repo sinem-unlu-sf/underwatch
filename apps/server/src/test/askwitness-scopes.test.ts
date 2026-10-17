@@ -164,7 +164,7 @@ describe("POST /api/investigations (workspace) and /api/runs/:id/investigations"
     expect(a.unsupported_claims[0].invalid_evidence_ids).toEqual(["evt_does_not_exist", "/etc/passwd"]);
     expect(a.evidence_check.invalid_ids).toEqual(expect.arrayContaining(["evt_does_not_exist", "/etc/passwd", "fnd_other_workspace_secret"]));
     expect(a.evidence_limitations.join(" ")).toMatch(/capped selection/);
-    expect(r.body.turn.prompt_version).toBe("kw.ask-witness-scoped@1");
+    expect(r.body.turn.prompt_version).toBe("kw.ask-witness-scoped@2");
 
     const list = await getJson(c.app, `${apiPaths.investigations()}?scope=workspace`);
     expect(list.body.items).toHaveLength(1);

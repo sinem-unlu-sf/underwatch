@@ -31,7 +31,7 @@ export const BriefActionStatus = z.enum([
 export type BriefActionStatus = z.infer<typeof BriefActionStatus>;
 
 export const BRIEF_ACTION_STATUS_LABELS: Record<BriefActionStatus, string> = {
-  proposed: "Proposed (not created yet)",
+  proposed: "Proposed (recommendation only)",
   safeguard_proposed: "Safeguard proposed (not applied)",
   applied: "Applied (not verified)",
   verified_for_tested_scenario: "Verified for tested scenario",
@@ -131,6 +131,60 @@ export const FindingBrief = z.object({
 });
 export type FindingBrief = z.infer<typeof FindingBrief>;
 
+
+// ---------------------------------------------------------------------------------------------------------------
+// Short read (<= 150 words): the finding in one direct sentence, a few real counts, one-line cause, one-line fix.
+// Deterministic (no AI), built from the same records as the brief. Not evidence: ids in generated_from are the source.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const SHORT_READ_VERSION = "short-read/1";
+export const SHORT_READ_MAX_WORDS = 150;
+
+export const ShortReadNumber = z.object({
+  /** Short quantitative fact, e.g. "1 successful open of .env by node (kernel-observed)". */
+  text: z.string().min(1),
+  /** Where the count comes from: agent's own account, an independent collector, or Kernel Witness analysis. */
+  basis: z.enum(["reported", "observed", "derived"]),
+  /** Event / evidence / finding / verification-run ids the count was computed from (may be empty for a zero count). */
+  evidence_ids: z.array(z.string()),
+});
+export type ShortReadNumber = z.infer<typeof ShortReadNumber>;
+
+export const ShortRead = z.object({
+  short_read_version: z.string().min(1),
+  deterministic: z.literal(true),
+  finding_id: FindingId,
+  is_fixture: z.boolean(),
+  /** One direct sentence: what happened. Fixture findings end with "(hand-labeled fixture)". */
+  finding: z.string().min(1),
+  /** 2-5 quantitative facts from stored counts. */
+  numbers: z.array(ShortReadNumber).max(5),
+  /** Exactly one line: why it happened. */
+  why: z.string().min(1),
+  /** One line: the fix with its honest status from stored safeguard / verification rows. */
+  fix: z.string().min(1),
+  fix_status: BriefActionStatus,
+  fix_status_label: z.string().min(1),
+  fix_safeguard_id: SafeguardId.nullable(),
+  fix_verification_run_id: VerificationRunId.nullable(),
+  /** Words across finding + numbers + why + fix; always <= SHORT_READ_MAX_WORDS. */
+  word_count: z.number().int().nonnegative().max(SHORT_READ_MAX_WORDS),
+  generated_from: z.object({
+    finding_id: FindingId,
+    run_id: RunId,
+    event_ids: z.array(EventId),
+    evidence_ids: z.array(EvidenceId),
+    safeguard_ids: z.array(SafeguardId),
+    verification_run_ids: z.array(VerificationRunId),
+  }),
+});
+export type ShortRead = z.infer<typeof ShortRead>;
+
+export function shortReadWordCount(s: Pick<ShortRead, "finding" | "numbers" | "why" | "fix">): number {
+  const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+  return words(s.finding) + s.numbers.reduce((n, x) => n + words(x.text), 0) + words(s.why) + words(s.fix);
+}
+
 /** GET /api/findings/:id/brief */
-export const FindingBriefResponse = z.object({ brief: FindingBrief });
+export const FindingBriefResponse = z.object({ brief: FindingBrief, short_read: ShortRead.optional() });
 export type FindingBriefResponse = z.infer<typeof FindingBriefResponse>;

@@ -1,7 +1,7 @@
 import type { FindingGraphResponse, GraphBasis, GraphEdge, GraphNode, GraphNodeLabel, InvestigationTurn } from "@kw/schema";
 import { useQueryClient } from "@tanstack/react-query";
 import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { queryKeys, useFindingGraph, useFindingInvestigations, useInvestigation } from "../../api/queries";
 import { Badge, FixtureBadge } from "../badges";
@@ -66,8 +66,23 @@ function short(s: string, n = 28): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-export function EvidenceGraphPanel({ findingId, onOpenEvidence }: { findingId: string; onOpenEvidence?: (id: string) => void }) {
+export function EvidenceGraphPanel({
+  findingId,
+  onOpenEvidence,
+  highlightIds,
+  explanation,
+}: {
+  findingId: string;
+  onOpenEvidence?: (id: string) => void;
+  /** Addendum C: node ids named by a key-relationship path ("Open graph" from the summary view); outlined, never added. */
+  highlightIds?: readonly string[];
+  /** Rendered right after the canvas and legend, before the inspector and traversal details. */
+  explanation?: ReactNode;
+}) {
   const qc = useQueryClient();
+  const highlightKey = (highlightIds ?? []).join("|");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const highlight = useMemo(() => new Set(highlightIds ?? []), [highlightKey]);
   const graph = useFindingGraph(findingId);
   const invs = useFindingInvestigations(findingId);
   const latest = useMemo(() => {
@@ -116,6 +131,8 @@ export function EvidenceGraphPanel({ findingId, onOpenEvidence }: { findingId: s
           setSelected={setSelected}
           onOpenEvidence={onOpenEvidence}
           latestInvestigation={latest?.id ?? null}
+          highlight={highlight}
+          explanation={explanation}
         />
       )}
     </Panel>
@@ -131,6 +148,10 @@ export function GraphBody({
   setSelected,
   onOpenEvidence,
   latestInvestigation,
+  highlight,
+  compact = false,
+  focus,
+  explanation,
 }: {
   data: FindingGraphResponse;
   cited: Set<string>;
@@ -140,13 +161,22 @@ export function GraphBody({
   setSelected: (s: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null) => void;
   onOpenEvidence?: (id: string) => void;
   latestInvestigation: string | null;
+  highlight?: ReadonlySet<string>;
+  /** Quick Read: a smaller canvas without the group toggles and traversal insights. */
+  compact?: boolean;
+  /** Restrict the canvas to these real node ids (plus the finding). Never adds nodes. */
+  focus?: ReadonlySet<string>;
+  explanation?: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
 
   const hiddenLabels = useMemo(() => new Set([...hidden].flatMap((g) => OPTIONAL_GROUPS[g]?.labels ?? [])), [hidden]);
-  const nodes = useMemo(() => data.nodes.filter((n) => n.id === data.finding_id || !hiddenLabels.has(n.label)), [data, hiddenLabels]);
+  const nodes = useMemo(
+    () => data.nodes.filter((n) => n.id === data.finding_id || (focus ? focus.has(n.id) : !hiddenLabels.has(n.label))),
+    [data, hiddenLabels, focus],
+  );
   const nodeIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
   const edges = useMemo(() => data.edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to)), [data, nodeIds]);
   const byId = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data]);
@@ -157,7 +187,7 @@ export function GraphBody({
     const elements: ElementDefinition[] = [
       ...nodes.map((n) => ({
         data: { id: n.id, short: short(n.title), color: NODE_STYLE[n.label].color, shape: NODE_STYLE[n.label].shape },
-        classes: [n.id === data.finding_id ? "center" : "", cited.has(n.id) ? "cited" : ""].filter(Boolean).join(" "),
+        classes: [n.id === data.finding_id ? "center" : "", cited.has(n.id) ? "cited" : "", highlight?.has(n.id) ? "highlight" : ""].filter(Boolean).join(" "),
       })),
       ...edges.map((e) => {
         const b = BASIS_EDGE[e.basis ?? "derived"];
@@ -179,21 +209,26 @@ export function GraphBody({
               "background-color": "data(color)",
               shape: "data(shape)" as never,
               label: "data(short)",
-              color: "#b6b3ab",
+              color: "#92929D",
               "font-size": 9,
               "text-valign": "bottom",
               "text-margin-y": 3,
               width: 16,
               height: 16,
               "border-width": 1,
-              "border-color": "#2a2e34",
+              "border-color": "#2a2a30",
+              "transition-property": "opacity, border-color" as never,
+              "transition-duration": 0.15 as never,
               "text-wrap": "ellipsis",
               "text-max-width": "110px",
             },
           },
-          { selector: "node.center", style: { width: 26, height: 26, "border-width": 3, "border-color": "#eceae4" } },
+          { selector: "node.center", style: { width: 26, height: 26, "border-width": 3, "border-color": "#EDEDF0" } },
           { selector: "node.cited", style: { "border-width": 4, "border-color": "#7fc4ff" } },
-          { selector: "node:selected", style: { "border-width": 4, "border-color": "#eceae4", color: "#eceae4" } },
+          { selector: "node.highlight", style: { "border-width": 4, "border-color": "#e3a740", "border-style": "double" as never } },
+          { selector: "node:selected", style: { "border-width": 4, "border-color": "#8B8CF6", color: "#EDEDF0" } },
+          { selector: "node.hover-n", style: { color: "#EDEDF0", "border-color": "#8B8CF6", "border-width": 2 } },
+          { selector: ".faded", style: { opacity: 0.22 } },
           {
             selector: "edge",
             style: {
@@ -206,7 +241,8 @@ export function GraphBody({
               "curve-style": "bezier",
             },
           },
-          { selector: "edge:selected", style: { width: 3, label: "data(type)", "font-size": 8, color: "#eceae4", "text-background-color": "#15171a", "text-background-opacity": 1 } },
+          { selector: "edge.hover-e", style: { width: 2.4, label: "data(type)", "font-size": 8, color: "#EDEDF0", "text-background-color": "#111114", "text-background-opacity": 1 } },
+          { selector: "edge:selected", style: { width: 3, "line-color": "#8B8CF6", "target-arrow-color": "#8B8CF6", label: "data(type)", "font-size": 8, color: "#EDEDF0", "text-background-color": "#111114", "text-background-opacity": 1 } },
         ],
         layout: { name: "breadthfirst", roots: [data.finding_id], directed: false, spacingFactor: 1.15, padding: 12, animate: false } as never,
       });
@@ -226,19 +262,55 @@ export function GraphBody({
     cy.on("tap", (evt) => {
       if (evt.target === cy) setSelected(null);
     });
+    // Hover: emphasise the hovered element and everything directly connected to it; fade the rest.
+    const clearHover = () => cy.elements().removeClass("faded hover-n hover-e");
+    cy.on("mouseover", "node", (evt) => {
+      const hood = evt.target.closedNeighborhood();
+      cy.elements().not(hood).addClass("faded");
+      hood.nodes().addClass("hover-n");
+      hood.edges().addClass("hover-e");
+    });
+    cy.on("mouseover", "edge", (evt) => {
+      const hood = evt.target.union(evt.target.connectedNodes());
+      cy.elements().not(hood).addClass("faded");
+      evt.target.addClass("hover-e");
+      evt.target.connectedNodes().addClass("hover-n");
+    });
+    cy.on("mouseout", "node, edge", clearHover);
     cyRef.current = cy;
     return () => {
       cy.destroy();
       cyRef.current = null;
     };
-  }, [nodes, edges, cited, data.finding_id, byId, edgeById, setSelected]);
+  }, [nodes, edges, cited, highlight, data.finding_id, byId, edgeById, setSelected]);
 
-  const basesPresent = [...new Set(data.edges.map((e) => e.basis ?? "derived"))] as GraphBasis[];
+  const basesPresent = [...new Set(edges.map((e) => e.basis ?? "derived"))] as GraphBasis[];
+
+  /** Select from the canvas controls or the list alternative; mirrors a tap on the canvas. */
+  const pick = (sel: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge }) => {
+    setSelected(sel);
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.elements().unselect();
+    const el = cy.getElementById(sel.kind === "node" ? sel.node.id : `e:${sel.edge.id}`);
+    if (el.nonempty()) {
+      el.select();
+      cy.animate({ center: { eles: el } }, { duration: 160 });
+    }
+  };
+  const zoomBy = (factor: number) => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const z = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), cy.zoom() * factor));
+    cy.zoom({ level: z, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+  };
+  const fit = () => cyRef.current?.fit(undefined, 12);
+  const canvasHeight = compact ? "h-[260px]" : "h-[420px]";
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[12px] text-fg-1">{data.detail}</p>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-2">
+      {compact ? null : <p className="text-[12px] text-fg-1">{data.detail}</p>}
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-2 ${compact ? "hidden" : ""}`}>
         <span className="label">Show</span>
         {Object.entries(OPTIONAL_GROUPS).map(([key, g]) => (
           <label key={key} className="flex items-center gap-1">
@@ -258,6 +330,11 @@ export function GraphBody({
           </label>
         ))}
         {data.truncated ? <Badge tone="warn">truncated</Badge> : null}
+        {highlight && highlight.size > 0 ? (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-warn" /> on the selected key relationship ({[...highlight].filter((id) => nodeIds.has(id)).length} shown)
+          </span>
+        ) : null}
         {cited.size > 0 ? (
           <span className="flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-focus" /> cited by latest Ask Witness answer ({cited.size})
@@ -269,12 +346,26 @@ export function GraphBody({
           Graph renderer unavailable ({renderError}). {nodes.length} node(s), {edges.length} relationship(s) listed in the inspector below.
         </div>
       ) : null}
-      <div
-        ref={container}
-        className={`h-[420px] w-full rounded-[3px] border border-line bg-surface-0 ${renderError ? "hidden" : ""}`}
-        role="img"
-        aria-label={`Evidence graph with ${nodes.length} nodes and ${edges.length} relationships`}
-      />
+      <div className={`relative ${renderError ? "hidden" : ""}`}>
+        <div
+          ref={container}
+          className={`${canvasHeight} w-full rounded-md border border-line bg-surface-0`}
+          role="img"
+          aria-label={`Evidence graph with ${nodes.length} nodes and ${edges.length} relationships. A list of every node and relationship follows.`}
+        />
+        <div className="absolute top-2 right-2 flex gap-1" role="group" aria-label="Graph view controls">
+          <button type="button" className="btn btn-sm btn-icon" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(1.25)}>
+            +
+          </button>
+          <button type="button" className="btn btn-sm btn-icon" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(0.8)}>
+            −
+          </button>
+          <button type="button" className="btn btn-sm" title="Fit the whole graph in view" onClick={fit}>
+            Fit
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-fg-2">Hover a node to see what it connects to; click a node or relationship to inspect it. Scroll or pinch to zoom, drag to pan.</p>
+      </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-2">
         {basesPresent.map((b) => (
           <span key={b} className="flex items-center gap-1">
@@ -285,9 +376,85 @@ export function GraphBody({
           </span>
         ))}
       </div>
-      <Inspector selected={selected} cited={cited} findingId={data.finding_id} onOpenEvidence={onOpenEvidence} byId={byId} latestInvestigation={latestInvestigation} />
-      <Insights data={data} />
+      {explanation}
+      <Inspector
+        selected={selected}
+        cited={cited}
+        findingId={data.finding_id}
+        onOpenEvidence={onOpenEvidence}
+        byId={byId}
+        latestInvestigation={latestInvestigation}
+        edges={edges}
+        onPick={pick}
+      />
+      <GraphList nodes={nodes} edges={edges} byId={byId} selected={selected} onPick={pick} highlight={highlight} cited={cited} />
+      {compact ? null : <Insights data={data} />}
     </div>
+  );
+}
+
+/** Accessible alternative to the canvas: every shown node and relationship as a keyboard-reachable list. */
+function GraphList({
+  nodes,
+  edges,
+  byId,
+  selected,
+  onPick,
+  highlight,
+  cited,
+}: {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  byId: Map<string, GraphNode>;
+  selected: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null;
+  onPick: (sel: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge }) => void;
+  highlight?: ReadonlySet<string>;
+  cited: Set<string>;
+}) {
+  const selId = selected?.kind === "node" ? selected.node.id : selected?.kind === "edge" ? `e:${selected.edge.id}` : null;
+  const item = "w-full rounded-[4px] px-1.5 py-0.5 text-left hover:bg-surface-2 aria-pressed:bg-surface-2 aria-pressed:text-fg-0";
+  return (
+    <details className="rounded-md border border-line px-2 py-1.5 text-[12px]">
+      <summary className="cursor-pointer text-[11.5px] text-fg-2">
+        List view: {nodes.length} node{nodes.length === 1 ? "" : "s"}, {edges.length} relationship{edges.length === 1 ? "" : "s"}
+      </summary>
+      <div className="mt-1.5 grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="label mb-1">Nodes</div>
+          <ul className="max-h-[240px] space-y-0.5 overflow-y-auto">
+            {nodes.map((n) => (
+              <li key={n.id}>
+                <button type="button" className={item} aria-pressed={selId === n.id} onClick={() => onPick({ kind: "node", node: n })}>
+                  <span className="text-fg-2">{n.label}</span> <span className="text-fg-1">{short(n.title, 60)}</span>
+                  {n.basis ? <span className="text-fg-2"> · {n.basis}</span> : null}
+                  {highlight?.has(n.id) ? <span className="text-warn"> · on key relationship</span> : null}
+                  {cited.has(n.id) ? <span className="text-focus"> · cited</span> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div className="label mb-1">Relationships</div>
+          {edges.length === 0 ? (
+            <p className="text-fg-2">No relationships among the shown nodes.</p>
+          ) : (
+            <ul className="max-h-[240px] space-y-0.5 overflow-y-auto">
+              {edges.map((e) => (
+                <li key={e.id}>
+                  <button type="button" className={item} aria-pressed={selId === `e:${e.id}`} onClick={() => onPick({ kind: "edge", edge: e })}>
+                    <span className="text-fg-1">{short(byId.get(e.from)?.title ?? e.from, 32)}</span>{" "}
+                    <span className="font-mono text-[11px] text-fg-2">{e.type}</span>{" "}
+                    <span className="text-fg-1">{short(byId.get(e.to)?.title ?? e.to, 32)}</span>
+                    <span className="text-fg-2"> · {e.basis ?? "unknown basis"}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -298,6 +465,8 @@ function Inspector({
   onOpenEvidence,
   byId,
   latestInvestigation,
+  edges,
+  onPick,
 }: {
   selected: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null;
   cited: Set<string>;
@@ -305,6 +474,8 @@ function Inspector({
   onOpenEvidence?: (id: string) => void;
   byId: Map<string, GraphNode>;
   latestInvestigation: string | null;
+  edges: GraphEdge[];
+  onPick: (sel: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge }) => void;
 }) {
   if (!selected) return <div className="text-[12px] text-fg-2">Select a node or relationship to inspect it.</div>;
   if (selected.kind === "edge") {
@@ -315,8 +486,9 @@ function Inspector({
           <Mono>{e.type}</Mono>
           <Badge tone={e.basis === "observed" ? "neutral" : e.basis === "inferred" ? "warn" : "unknown"}>{e.basis ?? "unknown basis"}</Badge>
         </div>
-        <div className="mt-1 text-fg-1">
-          {byId.get(e.from)?.title ?? e.from} → {byId.get(e.to)?.title ?? e.to}
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-fg-1">
+          <NodeLink id={e.from} byId={byId} onPick={onPick} /> <span aria-hidden>→</span>
+          <span className="sr-only">to</span> <NodeLink id={e.to} byId={byId} onPick={onPick} />
         </div>
         <div className="mt-1 text-[11px] text-fg-2">{BASIS_EDGE[e.basis ?? "derived"].label}</div>
       </div>
@@ -358,7 +530,17 @@ function Inspector({
             open evidence record
           </button>
         ) : null}
+        {n.label === "Run" ? (
+          <Link to={`/runs/${encodeURIComponent(n.id)}`} className="text-focus hover:underline">
+            open run
+          </Link>
+        ) : runId && !isEvent(n.label) ? (
+          <Link to={`/runs/${encodeURIComponent(runId)}`} className="text-focus hover:underline">
+            open run
+          </Link>
+        ) : null}
       </div>
+      <Connected node={n} edges={edges} byId={byId} onPick={onPick} />
       {n.label === "Investigation" ? (
         <p className="mt-1.5 text-[11px] text-fg-2">
           AI investigation record (advisory). It is stored separately from evidence; its USES_EVIDENCE links point only at ids the application found in the bundle sent to the model.
@@ -466,6 +648,52 @@ function Insights({ data }: { data: FindingGraphResponse }) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function NodeLink({ id, byId, onPick }: { id: string; byId: Map<string, GraphNode>; onPick: (sel: { kind: "node"; node: GraphNode }) => void }) {
+  const n = byId.get(id);
+  if (!n) return <Mono className="text-[11px]">{id}</Mono>;
+  return (
+    <button type="button" className="text-focus hover:underline" onClick={() => onPick({ kind: "node", node: n })}>
+      {n.title}
+    </button>
+  );
+}
+
+/** Direct connections of the inspected node, so the graph can be walked without the canvas. */
+function Connected({
+  node,
+  edges,
+  byId,
+  onPick,
+}: {
+  node: GraphNode;
+  edges: GraphEdge[];
+  byId: Map<string, GraphNode>;
+  onPick: (sel: { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge }) => void;
+}) {
+  const links = edges.filter((e) => e.from === node.id || e.to === node.id);
+  if (links.length === 0) return null;
+  return (
+    <div className="mt-2">
+      <div className="label mb-0.5">Connected ({links.length})</div>
+      <ul className="space-y-0.5 text-[11.5px]">
+        {links.slice(0, 12).map((e) => {
+          const other = e.from === node.id ? e.to : e.from;
+          return (
+            <li key={e.id} className="flex flex-wrap items-center gap-1">
+              <button type="button" className="font-mono text-[11px] text-fg-2 hover:underline" onClick={() => onPick({ kind: "edge", edge: e })}>
+                {e.from === node.id ? `${e.type} →` : `← ${e.type}`}
+              </button>
+              <NodeLink id={other} byId={byId} onPick={onPick} />
+              <span className="text-fg-2">({e.basis ?? "unknown basis"})</span>
+            </li>
+          );
+        })}
+        {links.length > 12 ? <li className="text-fg-2">{links.length - 12} more in the list view below.</li> : null}
+      </ul>
     </div>
   );
 }

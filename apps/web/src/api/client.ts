@@ -223,3 +223,11 @@ export const api = {
 
 /** Typed JSON request for addendum API modules that keep their own route map (e.g. api/findingsViews.ts). */
 export { request as requestJson };
+
+/** Request that answers 204 / empty body on success (e.g. POST /api/accounts/logout). Errors use the same ApiError handling. */
+export async function requestNoContent(path: string, init?: RequestInit): Promise<void> {
+  const res = await send(path, init);
+  if (res.ok) return;
+  const { body, isJson } = parseJson(await res.text());
+  throw errorFrom(path, res, body, isJson);
+}

@@ -1,5 +1,7 @@
 import { Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
+import { AskWitnessPage } from "./pages/AskWitnessPage";
+import { EvidenceExplorerPage } from "./pages/EvidenceExplorerPage";
 import { FindingDetailPage } from "./pages/FindingDetailPage";
 import { FindingsPage } from "./pages/FindingsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -21,6 +23,8 @@ export function App() {
         <Route path="findings/:id" element={<FindingDetailPage />} />
         <Route path="safeguards" element={<SafeguardsPage />} />
         <Route path="safeguards/:id" element={<SafeguardDetailPage />} />
+        <Route path="evidence" element={<EvidenceExplorerPage />} />
+        <Route path="ask" element={<AskWitnessPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

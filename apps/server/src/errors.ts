@@ -14,6 +14,7 @@ export const HTTP_STATUS: Record<ApiErrorCode, number> = {
   file_conflict: 409,
   ai_unavailable: 503,
   timeout: 504,
+  rate_limited: 429,
 };
 
 /** Thrown anywhere in request handling; the app's error handler turns it into an ApiError body. */

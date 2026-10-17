@@ -49,13 +49,14 @@ export function Timeline({ events, correlations, findings, selectedId, onSelect 
   }, [selectedId, events]);
 
   return (
-    <div ref={containerRef} role="list" aria-label="Event timeline">
-      <div className="sticky top-0 z-10 grid grid-cols-[92px_1fr_1fr] gap-2 border-b border-line-strong bg-surface-1 px-3 py-1.5">
+    <div ref={containerRef} role="list" aria-label="Event timeline: agent-reported and independently observed lanes">
+      <div className="sticky top-0 z-10 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 border-b border-line-strong bg-surface-1/95 px-3 py-2 backdrop-blur-sm sm:grid-cols-[88px_minmax(0,1fr)_minmax(0,1fr)]">
         <span className="label">Time</span>
         <span className="label flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full bg-reported" aria-hidden /> Agent-reported
+          <span className="font-normal normal-case tracking-normal text-fg-2 sm:hidden">/ observed (lane on each card)</span>
         </span>
-        <span className="label flex items-center gap-1.5">
+        <span className="label hidden items-center gap-1.5 sm:flex">
           <span className="inline-block h-2 w-2 rounded-full bg-observed" aria-hidden /> Independently observed
         </span>
       </div>
@@ -70,20 +71,25 @@ export function Timeline({ events, correlations, findings, selectedId, onSelect 
           />
         );
         return (
-          <div key={e.id} role="listitem" data-event-id={e.id} className="grid grid-cols-[92px_1fr_1fr] gap-2 border-b border-line px-3 py-1">
-            <time dateTime={e.timestamp} title={e.timestamp} className="pt-1.5 font-mono text-[11px] text-fg-2">
+          <div
+            key={e.id}
+            role="listitem"
+            data-event-id={e.id}
+            className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 border-b border-line px-3 py-1.5 sm:grid-cols-[88px_minmax(0,1fr)_minmax(0,1fr)]"
+          >
+            <time dateTime={e.timestamp} title={e.timestamp} className="pt-2 font-mono text-[11px] text-fg-2 tabular-nums">
               {formatTime(e.timestamp)}
             </time>
             {e.basis === "derived" ? (
-              <div className="col-span-2">{card}</div>
+              <div className="sm:col-span-2">{card}</div>
             ) : e.basis === "reported" ? (
               <>
                 <div>{card}</div>
-                <div aria-hidden className="border-l border-dashed border-line" />
+                <div aria-hidden className="hidden border-l border-dashed border-line sm:block" />
               </>
             ) : (
               <>
-                <div aria-hidden className="border-r border-dashed border-line" />
+                <div aria-hidden className="hidden border-r border-dashed border-line sm:block" />
                 <div>{card}</div>
               </>
             )}
@@ -113,8 +119,8 @@ function EventCard({
       type="button"
       onClick={() => onSelect(e.id)}
       aria-pressed={selected}
-      className={`block w-full rounded-[3px] border border-l-[3px] px-2 py-1 text-left ${accent} ${
-        selected ? "border-focus bg-surface-3" : "border-line bg-surface-2 hover:bg-surface-3"
+      className={`block w-full rounded-sm border border-l-[3px] px-2.5 py-1.5 text-left transition-colors duration-150 ease-out ${accent} ${
+        selected ? "border-focus bg-surface-3" : "border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3"
       } ${e.basis === "derived" ? "border-dashed" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-1">
@@ -133,7 +139,7 @@ function EventCard({
           <SourceBadge source={e.source} />
         </span>
       </div>
-      <div className="mt-1 text-[12px] text-fg-0">{e.summary}</div>
+      <div className="mt-1 text-[12.5px] leading-5 text-fg-0">{e.summary}</div>
       {e.target_resource ? <div className="mt-0.5 font-mono text-[11px] break-all text-fg-1">{truncate(e.target_resource, 160)}</div> : null}
       <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-2">
         {e.process_id !== null ? (
@@ -143,8 +149,18 @@ function EventCard({
           </span>
         ) : null}
         {e.tool_name ? <span className="font-mono">tool {e.tool_name}</span> : null}
-        {e.limitations.length > 0 ? <span>{e.limitations.length} limitation{e.limitations.length === 1 ? "" : "s"}</span> : null}
-        {e.unavailable_fields.length > 0 ? <span>{e.unavailable_fields.length} field{e.unavailable_fields.length === 1 ? "" : "s"} unavailable</span> : null}
+        {e.limitations.length > 0 ? (
+          <span>
+            {e.limitations.length} limitation
+            {e.limitations.length === 1 ? "" : "s"}
+          </span>
+        ) : null}
+        {e.unavailable_fields.length > 0 ? (
+          <span>
+            {e.unavailable_fields.length} field
+            {e.unavailable_fields.length === 1 ? "" : "s"} unavailable
+          </span>
+        ) : null}
         {correlations.map((c) => (
           <CorrelationBadge key={c.id} match={c.match} confidence={c.confidence} />
         ))}

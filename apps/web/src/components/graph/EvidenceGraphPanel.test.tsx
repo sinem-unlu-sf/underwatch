@@ -1,5 +1,7 @@
-import type { FindingGraphResponse, GraphNode } from "@kw/schema";
-import { render, screen } from "@testing-library/react";
+import type { FindingGraphResponse, GraphEdge, GraphNode } from "@kw/schema";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { GraphBody } from "./EvidenceGraphPanel";
@@ -78,5 +80,63 @@ describe("EvidenceGraphPanel body", () => {
     renderBody({ ...base, source: "relational", detail: "Neo4j unavailable (graph_unavailable); built from the relational store.", insights: null });
     expect(screen.getByText(/Neo4j unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Process ancestry and cross-run traversal need Neo4j/)).toBeInTheDocument();
+  });
+});
+
+type Sel = { kind: "node"; node: GraphNode } | { kind: "edge"; edge: GraphEdge } | null;
+function Stateful({ data, focus, compact }: { data: FindingGraphResponse; focus?: Set<string>; compact?: boolean }) {
+  const [selected, setSelected] = useState<Sel>(null);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  return (
+    <MemoryRouter>
+      <GraphBody
+        data={data}
+        cited={new Set()}
+        hidden={hidden}
+        setHidden={setHidden}
+        selected={selected}
+        setSelected={setSelected}
+        latestInvestigation={null}
+        focus={focus}
+        compact={compact}
+        explanation={<p>Key relationship explanation</p>}
+      />
+    </MemoryRouter>
+  );
+}
+
+describe("EvidenceGraphPanel interactions", () => {
+  it("offers zoom / fit controls and an accessible list of every node and relationship", async () => {
+    const user = userEvent.setup();
+    render(<Stateful data={base} />);
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoom out" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fit" })).toBeInTheDocument();
+    await user.click(screen.getByText("List view: 3 nodes, 2 relationships"));
+    await user.click(screen.getByRole("button", { name: /ObservedEvent cat opened \.env/ }));
+    // The inspector shows the node, its run timeline link, and its direct connections (walkable without the canvas).
+    expect(screen.getByRole("link", { name: "open in run timeline" })).toHaveAttribute("href", "/runs/run_x?event=evt_obs");
+    expect(screen.getByText("Connected (2)")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "← SUPPORTED_BY" }));
+    expect(screen.getAllByText("SUPPORTED_BY").length).toBeGreaterThan(0);
+    // Edge inspector links back to both endpoint nodes.
+    await user.click(screen.getAllByRole("button", { name: "Forbidden .env read" })[0]!);
+    expect(screen.getByText("fnd_a", { selector: "span" })).toBeInTheDocument();
+  });
+
+  it("renders the relationship explanation after the canvas and before the inspector", () => {
+    render(<Stateful data={base} />);
+    const explanation = screen.getByText("Key relationship explanation");
+    const inspectorHint = screen.getByText("Select a node or relationship to inspect it.");
+    expect(explanation.compareDocumentPosition(inspectorHint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("compact focus mode draws only the real nodes on the path and skips the traversal panels", async () => {
+    const user = userEvent.setup();
+    render(<Stateful data={base} focus={new Set(["evt_obs"])} compact />);
+    await user.click(screen.getByText("List view: 2 nodes, 1 relationship"));
+    const list = screen.getByText("Nodes").parentElement!;
+    expect(within(list).queryByText(/Bash requested/)).toBeNull();
+    expect(screen.queryByText(/Process ancestry/)).toBeNull();
   });
 });

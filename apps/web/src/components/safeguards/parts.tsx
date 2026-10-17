@@ -26,7 +26,7 @@ export function MechanismBadge({ kind }: { kind: MechanismKind }) {
 /** Always visible next to a safeguard: what the mechanism can and cannot enforce, from the shared MECHANISMS table. */
 export function EnforcementExplainer({ m, compact }: { m: MechanismInfo; compact?: boolean }) {
   return (
-    <div className="space-y-1.5 rounded-[3px] border border-line bg-surface-0 p-2 text-[12px]">
+    <div className="space-y-1.5 rounded-md border border-line bg-surface-0 p-2 text-[12px]">
       <div className="flex flex-wrap items-center gap-1.5">
         <MechanismBadge kind={m.kind} />
         <span className="font-medium text-fg-0">{m.label}</span>
@@ -115,18 +115,18 @@ export function DiffView({ preview, workspace }: { preview: FileDiffPreview; wor
         </span>
         <span className="ml-auto flex gap-1" role="group" aria-label="Diff view mode">
           {(["diff", "before", "after"] as const).map((m) => (
-            <button key={m} type="button" className={`btn ${mode === m ? "border-focus" : ""}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
+            <button key={m} type="button" className="btn btn-sm" aria-pressed={mode === m} onClick={() => setMode(m)}>
               {m}
             </button>
           ))}
         </span>
       </div>
       {preview.duplicate_of ? (
-        <div className="rounded-[3px] border border-warn/50 bg-warn/10 px-2 py-1 text-[12px] text-fg-1">
+        <div className="rounded-md border border-warn/50 bg-warn/10 px-2 py-1 text-[12px] text-fg-1">
           An equivalent instruction already exists in this file, so no change is proposed: <Mono>{preview.duplicate_of}</Mono>
         </div>
       ) : null}
-      <pre className="max-h-96 overflow-auto rounded-[3px] border border-line bg-surface-0 p-2 font-mono text-[12px] leading-[1.45]">
+      <pre className="max-h-96 overflow-auto rounded-md border border-line bg-surface-0 p-2 font-mono text-[12px] leading-[1.45]">
         {mode === "diff"
           ? lines.map((l, i) => (
               <div key={i} className={`whitespace-pre-wrap ${lineClass(l)}`}>
@@ -173,7 +173,7 @@ function Step({ label, state, detail }: { label: string; state: StepState; detai
             ? "hatch text-unknown"
             : "border-line text-fg-2";
   return (
-    <li className={`flex min-w-[110px] flex-1 flex-col rounded-[3px] border px-2 py-1 ${cls}`} aria-current={state === "current" ? "step" : undefined}>
+    <li className={`flex min-w-[110px] flex-1 flex-col rounded-md border px-2 py-1 ${cls}`} aria-current={state === "current" ? "step" : undefined}>
       <span className="text-[11px] font-semibold tracking-wide uppercase">{label}</span>
       {detail ? <span className="text-[11px]">{detail}</span> : null}
     </li>
@@ -200,7 +200,7 @@ export function SafeguardStepper({ lifecycle, verification }: { lifecycle: Safeg
         state={s(2)}
         detail={lifecycle === "application_failed" ? "Application failed" : lifecycle === "rolled_back" ? "Rolled back" : undefined}
       />
-      <li className="flex min-w-[140px] flex-1 flex-col gap-0.5 rounded-[3px] border border-line px-2 py-1" data-step-state={vTone}>
+      <li className="flex min-w-[140px] flex-1 flex-col gap-0.5 rounded-md border border-line px-2 py-1" data-step-state={vTone}>
         <span className="text-[11px] font-semibold tracking-wide text-fg-1 uppercase">Verification</span>
         <span>
           <VerificationStateBadge state={verification} />

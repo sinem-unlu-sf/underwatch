@@ -4,10 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link, useMatch, useNavigate } from "react-router";
 import { ApiRequestError, newClientRequestId } from "../../api/client";
 import { queryKeys } from "../../api/queries";
-import { asBundleRef, citationHref, scopedApi, scopeKey, type AskScope, type ScopedEvidenceRef } from "../../api/scopedAsk";
+import { asBundleRef, citationHref, scopedApi, scopeKey, type AskScope, type ScopedAskBody, type ScopedEvidenceRef } from "../../api/scopedAsk";
 import { MutationError, SkeletonBlock } from "../states";
 import { Mono } from "../ui";
-import { TurnView, type EvidenceLookup } from "./AnswerView";
+import { TurnView, type EvidenceLookup, type FollowUpMode } from "./AnswerView";
 import { EvidenceRefDrawer } from "./EvidenceRef";
 
 /**
@@ -56,6 +56,8 @@ interface Pending {
   question: string;
   clientRequestId: string;
   investigationId: string | null;
+  /** Addendum C: omitted = concise / standard. */
+  mode?: FollowUpMode;
 }
 
 export interface OpenOptions {
@@ -241,8 +243,17 @@ function AskWitnessDrawer({
   const [pending, setPending] = useState<Pending | null>(null);
 
   const ask = useMutation({
-    mutationFn: (p: Pending) =>
-      scopedApi.ask(p.scope, { question: p.question, client_request_id: p.clientRequestId, ...(p.investigationId ? { investigation_id: p.investigationId } : {}) }),
+    mutationFn: (p: Pending) => {
+      // Addendum C: depth/style are additive body fields (omitted = concise / standard).
+      const body: ScopedAskBody & FollowUpMode = {
+        question: p.question,
+        client_request_id: p.clientRequestId,
+        ...(p.investigationId ? { investigation_id: p.investigationId } : {}),
+        ...(p.mode?.depth && p.mode.depth !== "concise" ? { depth: p.mode.depth } : {}),
+        ...(p.mode?.style && p.mode.style !== "standard" ? { style: p.mode.style } : {}),
+      };
+      return scopedApi.ask(p.scope, body);
+    },
     onSuccess: (res, p) => {
       const c = conversations.get(p.key) ?? emptyConversation(null);
       c.investigationId = res.investigation.id;
@@ -257,10 +268,10 @@ function AskWitnessDrawer({
     },
   });
 
-  const submit = (question: string) => {
+  const submit = (question: string, mode?: FollowUpMode) => {
     const q = question.trim();
     if (!q || !scope || !key || ask.isPending) return;
-    const p: Pending = { key, scope, question: q, clientRequestId: newClientRequestId(), investigationId: conv?.investigationId ?? null };
+    const p: Pending = { key, scope, question: q, clientRequestId: newClientRequestId(), investigationId: conv?.investigationId ?? null, ...(mode ? { mode } : {}) };
     setPending(p);
     setInput("");
     ask.mutate(p);
@@ -410,7 +421,7 @@ function AskWitnessDrawer({
               ) : null}
 
               {turns.map((t) => (
-                <TurnView key={t.id} turn={t} ev={ev} onRetry={submit} retrying={ask.isPending} />
+                <TurnView key={t.id} turn={t} ev={ev} onRetry={submit} onFollowUp={submit} retrying={ask.isPending} />
               ))}
 
               {showPending ? (
