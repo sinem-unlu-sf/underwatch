@@ -43,7 +43,7 @@ function action(b: FindingBrief, mechanism: string) {
 describe("finding brief (Addendum C)", () => {
   it("is embedded in GET /api/findings/:id without changing any existing field, and matches the finding", async () => {
     const d = await detail(LIVE_FINDING);
-    const { brief: embedded, ...rest } = d;
+    const { brief: embedded, short_read: _shortRead, ...rest } = d;
     // Existing response fields are exactly what the repo served before the brief existed.
     expect(rest).toEqual(JSON.parse(JSON.stringify(getFindingDetail(ctx.db, LIVE_FINDING))));
     expect(embedded).toBeDefined();

@@ -11,6 +11,7 @@ import { DEFAULT_RAW_EVIDENCE_RETENTION_DAYS, type DbLocation } from "./config";
 import { stmt } from "./db/codec";
 import type { Db } from "./db/connection";
 import { appliedMigrations } from "./db/migrate";
+import { accountCount } from "./accounts/store";
 
 const PENDING = "not implemented in this build";
 
@@ -222,6 +223,7 @@ export function settingsStatus({ db, dbLocation, env, inference }: StatusContext
   const activeLive = stmt(db, "SELECT id FROM policy_versions WHERE is_fixture = 0 AND policy_id <> 'kw-verification' ORDER BY julianday(created_at) DESC, id DESC LIMIT 1").get();
   const migrations = appliedMigrations(db);
   const latest = migrations.at(-1);
+  const localAccounts = accountCount(db);
 
   return {
     generated_at: new Date().toISOString(),
@@ -262,5 +264,6 @@ export function settingsStatus({ db, dbLocation, env, inference }: StatusContext
         "@kw/redaction runs on every captured string at ingest (live runs and fixtures) and again on every bundle sent to ai& (fail closed: a redaction failure stores a placeholder). Pattern-based: unusual secret formats can still be missed.",
     },
     data_mode: dataMode(db),
+    ...(localAccounts === null ? {} : { local_accounts: localAccounts }),
   };
 }

@@ -5,10 +5,12 @@ import { BrowserRouter } from "react-router";
 import { captureTokenFromUrl } from "./api/auth";
 import { ApiRequestError } from "./api/client";
 import { App } from "./App";
+import { redirectLegacyLaunchToOverview } from "./lib/launchRedirect";
 import "./styles.css";
 
 // Before anything renders or fetches: move ?token= from the address bar into storage.
-captureTokenFromUrl();
+// A launch link to "/" (the landing page since /overview took the Overview) still opens the app.
+redirectLegacyLaunchToOverview(captureTokenFromUrl());
 
 const queryClient = new QueryClient({
   defaultOptions: {

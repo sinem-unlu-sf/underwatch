@@ -27,6 +27,7 @@ import { OutcomePair } from "../components/safeguards/OutcomePair";
 import { EnforcementPill, SafeguardWorkflow, workflowForListItem } from "../components/safeguards/Workflow";
 import { CodeBlock } from "../components/ds/CodeBlock";
 import { Icon } from "../components/ds/Icon";
+import { SafeguardsNeedingActionSection } from "../components/overview/SafeguardsNeedingAction";
 
 const FILTER_KEYS = ["approval_status", "application_status", "verification_status", "finding_id", "fixture"];
 
@@ -49,6 +50,8 @@ export function SafeguardsPage() {
         title="Safeguards"
         subtitle="Proposed and applied protections derived from findings. Each shows the exact content that would be applied and how."
       />
+
+      <SafeguardsNeedingActionSection />
 
       <WorkflowLegend />
 

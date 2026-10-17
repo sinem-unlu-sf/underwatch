@@ -204,7 +204,7 @@ export function citationHref(id: string, ref: ScopedEvidenceRef | undefined): st
     return sg ? `/safeguards/${enc(sg)}?verification=${enc(id)}` : "/safeguards";
   }
   if (kind === "digest") return "/findings?mode=digest";
-  if (kind === "overview") return "/";
+  if (kind === "overview") return "/overview";
   if (kind === "coverage") return runId ? `/runs/${enc(runId)}` : null;
   if (ref?.finding_id) return `/findings/${enc(ref.finding_id)}`;
   return null;

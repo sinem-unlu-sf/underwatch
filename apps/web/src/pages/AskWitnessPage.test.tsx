@@ -131,6 +131,7 @@ const getUrls = () => fetchMock.mock.calls.filter(([, init]) => (init as Request
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  window.localStorage.clear();
   postQueue = [];
   gets = {
     "/api/runs": RunsResponse.parse({ items: [run(RUN), run("run_fx1", { is_fixture: true, label: "Fixture run" })], total: 2 }),
@@ -199,7 +200,7 @@ describe("AskWitnessPage", () => {
     await screen.findByText("None yet.");
 
     await user.type(screen.getByRole("textbox", { name: "Ask a question about all findings" }), "What needs my attention?");
-    await user.click(screen.getByRole("button", { name: "Ask" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText(answer.summary)).toBeInTheDocument();
     expect(postUrl(0)).toBe("/api/investigations");
@@ -276,7 +277,7 @@ describe("AskWitnessPage", () => {
     renderAt();
     await screen.findByText("None yet.");
 
-    await user.click(screen.getByRole("radio", { name: "A finding" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Ask Witness scope" }), "finding");
     expect(screen.getByText("Choose a finding to ask about")).toBeInTheDocument();
     const select = screen.getByRole("combobox", { name: "Finding" });
     await waitFor(() => expect(select).not.toBeDisabled());
@@ -302,5 +303,26 @@ describe("AskWitnessPage", () => {
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText(answer.summary)).toBeInTheDocument();
     expect(postBody(1).client_request_id).toBe(postBody(0).client_request_id);
+  });
+
+  it("chat layout: empty state shows a headline + 4 prompt cards, the rail collapses, New chat starts a fresh conversation", async () => {
+    const user = userEvent.setup();
+    gets["/api/investigations"] = { items: [{ ...investigation("inv_ws1"), turn_count: 1, last_question: "What needs my attention?" }] };
+    gets["/api/investigations/inv_ws1"] = { investigation: investigation("inv_ws1"), turns: [turn()], evidence_index: evidenceIndex, ai: { available: true, detail: "ok" } };
+    renderAt();
+    await screen.findByText(answer.summary);
+    expect(screen.queryByText("What do you want to know?")).toBeNull();
+    expect(screen.getByText("AI interprets records; it does not decide what happened")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /New chat/ }));
+    expect(await screen.findByText("What do you want to know?")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Suggested questions" })).getAllByRole("button")).toHaveLength(4);
+    expect(screen.getByTestId("location").textContent).toContain("inv=new");
+
+    await user.click(screen.getByRole("button", { name: "Hide conversations" }));
+    expect(screen.queryByRole("navigation", { name: "Conversations" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show conversations" }));
+    expect(screen.getByRole("list", { name: "Investigation history" })).toBeInTheDocument();
+    expect(posts()).toHaveLength(0);
   });
 });

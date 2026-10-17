@@ -1,9 +1,46 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { FindingsResponse, OverviewResponse, SafeguardsResponse, type FindingListItem, type RunListItem, type SafeguardListItem } from "@kw/schema";
+import { ASK_WITNESS_SUGGESTED_QUESTIONS, FindingsResponse, OverviewResponse, SafeguardsResponse, type FindingListItem, type RunListItem, type SafeguardListItem } from "@kw/schema";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fx04Raw from "../test/fixtures/finding-fx04.json";
 import { OverviewPage, rankOpenFindings, safeguardAction } from "./OverviewPage";
+
+// The Ask panel's investigation history is not under test here.
+vi.mock("../api/queries", async (orig) => {
+  const actual = await orig<typeof import("../api/queries")>();
+  return {
+    ...actual,
+    useFindingInvestigations: () => ({ isPending: false, isError: false, data: { items: [] } }),
+    useInvestigation: () => ({ isPending: false, isError: false, data: undefined }),
+  };
+});
+
+/** A real captured finding detail response with a deterministic short read for the requested id. */
+function detailWithShortRead(id: string) {
+  const raw = structuredClone(fx04Raw) as Record<string, unknown> & { finding: Record<string, unknown>; run: { id: string } };
+  return {
+    ...raw,
+    finding: { ...raw.finding, id },
+    short_read: {
+      short_read_version: "short-read/1",
+      deterministic: true,
+      finding_id: id,
+      is_fixture: false,
+      finding: `Short read sentence for ${id}.`,
+      numbers: [{ text: `1 observed open for ${id}`, basis: "observed", evidence_ids: [] }],
+      why: "The task did not need that file.",
+      fix: "Deny the read; no safeguard proposed yet.",
+      fix_status: "proposed",
+      fix_status_label: "Proposed",
+      fix_safeguard_id: null,
+      fix_verification_run_id: null,
+      word_count: 20,
+      generated_from: { finding_id: id, run_id: raw.run.id, event_ids: [], evidence_ids: [], safeguard_ids: [], verification_run_ids: [] },
+    },
+  };
+}
 
 const T0 = "2026-10-17T01:00:00.000Z";
 const T1 = "2026-10-17T02:00:00.000Z";
@@ -151,7 +188,8 @@ beforeEach(() => {
     vi.fn(async (input: string) => {
       const url = new URL(input, "http://localhost");
       calls.push(url.pathname + url.search);
-      const body = bodies[url.pathname];
+      const detail = /^\/api\/findings\/(fnd_[\w-]+)$/.exec(url.pathname);
+      const body = bodies[url.pathname] ?? (detail ? detailWithShortRead(detail[1]!) : undefined);
       return body ? reply(200, body) : reply(404, { error: { code: "not_found", message: `no mock for ${url.pathname}` } });
     }),
   );
@@ -196,54 +234,59 @@ describe("safeguardAction", () => {
 });
 
 describe("OverviewPage", () => {
-  it("ranks open findings with a one-line reason and links each to its finding", async () => {
+  it("shows the top 3 open findings as short reads with Full details and Ask, highest severity first", async () => {
     renderPage();
     const section = await screen.findByRole("region", { name: "Needs your attention" });
-    const list = await within(section).findByRole("list", { name: "Findings" });
-    const links = within(list)
-      .getAllByRole("link")
-      .filter((a) => a.getAttribute("href")?.startsWith("/findings/"));
-    expect(links.map((a) => a.textContent)).toEqual(["Finding fnd_crit", "Finding fnd_high_hi", "Finding fnd_high_lo", "Finding fnd_low"]);
-    expect(links[0]).toHaveAttribute("href", "/findings/fnd_crit");
-    expect(within(list).getByText("Why fnd_crit was flagged")).toBeInTheDocument();
-    // Without a description, the recommended next step is the one-line reason.
-    expect(within(list).getByText("Next step: Check the diff")).toBeInTheDocument();
-    // Resolved and confirmed findings are not "open".
-    expect(within(list).queryByText("Finding fnd_done")).toBeNull();
-    expect(within(section).getByRole("link", { name: "All open findings" })).toHaveAttribute("href", "/findings?status=open");
+    const items = await within(section).findAllByTestId("attention-item");
+    expect(items).toHaveLength(3);
+    const titles = items.map((li) => within(li).getAllByRole("link")[0]!.textContent);
+    expect(titles).toEqual(["Finding fnd_crit", "Finding fnd_high_hi", "Finding fnd_high_lo"]);
+    expect(await within(items[0]!).findByRole("region", { name: "Short read" })).toHaveTextContent("Short read sentence for fnd_crit.");
+    expect(within(items[0]!).getByRole("link", { name: /Full details/ })).toHaveAttribute("href", "/findings/fnd_crit");
+    expect(within(items[0]!).getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    // Resolved and confirmed findings are not "open"; the 4th open finding is behind "View all".
+    expect(within(section).queryByText("Finding fnd_done")).toBeNull();
+    expect(within(section).getByText(/1 more open finding/)).toBeInTheDocument();
+    expect(within(section).getByRole("link", { name: /All open findings/ })).toHaveAttribute("href", "/findings?status=open");
   });
 
-  it("labels live vs fixture runs, shows coverage caveats, and keeps the fixture/live breakdown", async () => {
+  it("Ask opens a side panel with the short read, suggested questions and the chat input; closing keeps the Overview", async () => {
+    const user = userEvent.setup();
     renderPage();
-    const section = await screen.findByRole("region", { name: "Recent runs" });
-    const rows = within(section).getAllByRole("listitem");
-    expect(within(rows[0]!).getByText("live")).toBeInTheDocument();
-    expect(within(rows[1]!).getByText("FIXTURE")).toBeInTheDocument();
-    expect(within(rows[1]!).getByText("coverage: partial")).toBeInTheDocument();
-    expect(within(rows[0]!).queryByText(/coverage:/)).toBeNull();
-    expect(screen.getByTestId("data-mode")).toHaveTextContent("1 live run · 1 fixture run");
-    expect(screen.getByTestId("record-counts")).toHaveTextContent("(fixture 1 · live 1)");
+    const items = await screen.findAllByTestId("attention-item");
+    await within(items[1]!).findByRole("region", { name: "Short read" });
+    await user.click(within(items[1]!).getByRole("button", { name: "Ask" }));
+    const panel = await screen.findByTestId("ask-about-issue-panel");
+    expect(await within(panel).findByRole("region", { name: "Short read" })).toHaveTextContent("Short read sentence for fnd_high_hi.");
+    expect(within(panel).getByRole("button", { name: ASK_WITNESS_SUGGESTED_QUESTIONS[0]! })).toBeInTheDocument();
+    const input = within(panel).getByRole("textbox", { name: "Ask a question about this finding" });
+    await user.type(input, "draft question");
+    await user.click(within(panel).getByRole("button", { name: /Close Ask about this issue/ }));
+    expect(panel).not.toBeVisible();
+    expect(screen.getAllByTestId("attention-item")).toHaveLength(3);
+    // Reopening the same finding keeps the typed question.
+    await user.click(within(items[1]!).getByRole("button", { name: "Ask" }));
+    expect(within(screen.getByTestId("ask-about-issue-panel")).getByRole("textbox", { name: "Ask a question about this finding" })).toHaveValue("draft question");
   });
 
-  it("lists safeguards needing action (failed first) and omits ones that need nothing", async () => {
+  it("keeps runs, safeguards and verification off the Overview: one status line, one verification line, links elsewhere", async () => {
     renderPage();
-    const section = await screen.findByRole("region", { name: "Safeguards needing action" });
-    const list = await within(section).findByRole("list", { name: "Safeguards" });
-    const titles = within(list)
-      .getAllByRole("link")
-      .filter((a) => a.getAttribute("href")?.startsWith("/safeguards/"))
-      .map((a) => a.textContent);
-    expect(titles).toEqual(["Safeguard sg_fail", "Safeguard sg_inc", "Safeguard sg_prop"]);
-    expect(within(list).getByText(/Verification inconclusive: the run did not establish the outcome/)).toBeInTheDocument();
-    expect(within(list).queryByText("Safeguard sg_ok")).toBeNull();
-  });
-
-  it("shows a compact system status with problems inline and a link to Settings", async () => {
-    renderPage();
-    const section = await screen.findByRole("region", { name: "Observation system" });
-    expect(within(section).getByText(/1 working/)).toBeInTheDocument();
-    expect(within(section).getByText(/Neo4j: slow responses/)).toBeInTheDocument();
-    expect(within(section).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    await screen.findByRole("region", { name: "Needs your attention" });
+    expect(screen.queryByRole("region", { name: "Recent runs" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Safeguards needing action" })).toBeNull();
+    expect(screen.queryByText("Runs with open findings")).toBeNull();
+    const status = screen.getByTestId("system-status");
+    expect(status).toHaveTextContent(/Neo4j/);
+    expect(status).toHaveTextContent(/1 degraded or error: Neo4j/);
+    expect(within(status).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/settings");
+    expect(screen.getByTestId("latest-verification")).toHaveTextContent(/None completed yet/);
+    const elsewhere = screen.getByTestId("elsewhere");
+    expect(within(elsewhere).getByRole("link", { name: /Runs needing review 1/ })).toHaveAttribute("href", "/runs#needs-review");
+    expect(within(elsewhere).getByRole("link", { name: /Safeguards awaiting approval 0/ })).toHaveAttribute("href", "/safeguards#needs-action");
+    expect(screen.getByTestId("record-counts")).toHaveTextContent("(live 1 · fixture 1)");
+    expect(screen.getByTestId("record-counts")).toHaveTextContent("FIXTURE");
+    // The Overview no longer fetches the safeguards list (that section moved to the Safeguards page).
+    expect(calls.some((c) => c.startsWith("/api/safeguards"))).toBe(false);
   });
 
   it("explains how to start a supervised run when nothing has been recorded", async () => {
@@ -255,12 +298,17 @@ describe("OverviewPage", () => {
       runs_needing_review: { count: 0, items: [] },
     });
     bodies["/api/findings"] = FindingsResponse.parse({ items: [], total: 0 });
-    bodies["/api/safeguards"] = SafeguardsResponse.parse({ items: [], total: 0 });
     renderPage();
     expect(await screen.findByRole("heading", { name: "No runs recorded yet" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Start supervised run/ })).toHaveAttribute("href", "/runs");
     expect(screen.getByText("pnpm seed:fixtures")).toBeInTheDocument();
+  });
+
+  it("explains how to get new findings when runs exist but none are open", async () => {
+    bodies["/api/findings"] = FindingsResponse.parse({ items: [finding("fnd_done", { status: "resolved" })], total: 1 });
+    renderPage();
     expect(await screen.findByText("No open findings")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Start supervised run/ })).toHaveAttribute("href", "/runs");
   });
 
   it("loads once and never polls", async () => {
@@ -268,7 +316,8 @@ describe("OverviewPage", () => {
     try {
       renderPage();
       await screen.findByRole("region", { name: "Needs your attention" });
-      await waitFor(() => expect(calls.filter((c) => c.startsWith("/api/findings")).length).toBe(1));
+      await waitFor(() => expect(calls.filter((c) => c === "/api/findings?limit=500").length).toBe(1));
+      await waitFor(() => expect(calls.filter((c) => /^\/api\/findings\/fnd_/.test(c)).length).toBe(3));
       const before = calls.length;
       await vi.advanceTimersByTimeAsync(5 * 60_000);
       expect(calls.length).toBe(before);

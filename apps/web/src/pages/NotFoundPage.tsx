@@ -5,7 +5,7 @@ export function NotFoundPage() {
   return (
     <div>
       <PageHeader title="Page not found" subtitle="This route does not exist in the Kernel Witness UI." />
-      <Link to="/" className="text-focus underline">
+      <Link to="/overview" className="text-focus underline">
         Go to Overview
       </Link>
     </div>

@@ -5,6 +5,7 @@ import { useRuns } from "../api/queries";
 import { CoverageBadge, FixtureBadge, RunStatusBadge, SeverityBadge } from "../components/badges";
 import { Pager } from "../components/Pager";
 import { StartSupervisedRun } from "../components/run/StartSupervisedRun";
+import { RunsNeedingReviewSection } from "../components/overview/RunsNeedingReview";
 import { DataTable, type Column } from "../components/ds/DataTable";
 import { Icon } from "../components/ds/Icon";
 import { Section } from "../components/ds/Section";
@@ -45,6 +46,7 @@ export function RunsPage() {
   return (
     <div>
       <PageHeader title="Agent Runs" subtitle="Supervised agent sessions, most recent first." />
+      <RunsNeedingReviewSection />
       <StartSupervisedRun />
 
       <form

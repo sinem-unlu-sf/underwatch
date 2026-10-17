@@ -34,7 +34,7 @@ try {
     else app.log.info(`graph projection: ${r.runs.filter((x) => x.ok).length}/${r.runs.length} run(s) projected into Neo4j`);
   });
   // Local-only log line (AC-9): the token lives in data/auth-token (mode 600). `pnpm open` opens the same URL.
-  app.log.info(`Open Kernel Witness: http://127.0.0.1:4601/?token=${ensureAuthToken(app.kw.paths.dataDir)}`);
+  app.log.info(`Open Kernel Witness: http://127.0.0.1:4601/overview?token=${ensureAuthToken(app.kw.paths.dataDir)}`);
 } catch (err) {
   app.log.error(err);
   db.close();

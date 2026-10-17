@@ -72,18 +72,13 @@ function AuthGate() {
   return <Outlet />;
 }
 
-/** Compact strip under the top bar: the FIXTURE DATA banner (when present) and the local-build honesty note, one row. */
+/** Compact strip under the top bar: the FIXTURE DATA banner, shown only when fixture data is present. */
 function ContextStrip() {
   const settings = useSettingsStatus();
+  if (!settings.data?.data_mode.contains_fixture_data) return null;
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface-1 px-4 py-1 text-[11px] sm:px-6">
-      {settings.data ? <DataModeBanner mode={settings.data.data_mode} /> : null}
-      <span
-        className="hatch ml-auto inline-flex items-center rounded-sm px-1.5 py-px text-unknown"
-        title="Local build. Integration status (ai&, verification harness, observers, Neo4j) is reported on the Settings page; unavailable parts are shown as unavailable, never simulated."
-      >
-        Local build: AI is advisory and optional; see Settings for what is connected
-      </span>
+      <DataModeBanner mode={settings.data.data_mode} />
     </div>
   );
 }

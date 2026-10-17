@@ -7,7 +7,7 @@ import {
   type RunListItem,
 } from "@kw/schema";
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiRequestError, api, newClientRequestId } from "../api/client";
 import { queryKeys, useFindings, useRuns } from "../api/queries";
@@ -15,11 +15,12 @@ import { asBundleRef, citationHref, scopedApi, scopeKey, type AskScope, type Sco
 import { TurnView, type EvidenceLookup, type FollowUpMode } from "../components/askwitness/AnswerView";
 import { SCOPE_SUGGESTIONS } from "../components/askwitness/AskWitnessDrawer";
 import { SUGGESTION_MODE } from "../components/askwitness/AskWitnessPanel";
+import { AI_FOOTNOTE, ChatComposer, PendingTurn, PillSelect, SuggestionCards } from "../components/askwitness/ChatParts";
 import { EvidenceRefDrawer } from "../components/askwitness/EvidenceRef";
 import { FixtureBadge, SeverityBadge } from "../components/badges";
-import { Notice, Section, SegmentedControl, StatusPill } from "../components/ds";
-import { EmptyState, ErrorState, MutationError, SkeletonBlock } from "../components/states";
-import { Mono, PageHeader, Time } from "../components/ui";
+import { Icon, Notice, StatusPill } from "../components/ds";
+import { ErrorState, MutationError, SkeletonBlock } from "../components/states";
+import { Mono, Time } from "../components/ui";
 import { truncate } from "../lib/format";
 import { useUrlFilters } from "../lib/searchParams";
 
@@ -147,6 +148,18 @@ function findingSource(findingId: string): ConversationSource {
   };
 }
 
+const RAIL_KEY = "kw.askwitness.rail";
+function initialRail(): boolean {
+  try {
+    const v = window.localStorage.getItem(RAIL_KEY);
+    if (v === "0") return false;
+    if (v === "1") return true;
+  } catch {
+    // storage unavailable: fall through to the viewport default
+  }
+  return typeof window.matchMedia === "function" ? window.matchMedia("(min-width: 1024px)").matches : true;
+}
+
 export function AskWitnessPage() {
   const { get, set } = useUrlFilters();
   const raw = get("scope");
@@ -166,78 +179,101 @@ export function AskWitnessPage() {
   const run = runId ? runs.data?.items.find((r) => r.id === runId) : undefined;
   const finding = findingId ? findings.data?.items.find((f) => f.id === findingId) : undefined;
 
-  return (
-    <div>
-      <PageHeader
-        title="Ask Witness"
-        subtitle="Questions answered from Kernel Witness's own records. AI interprets the evidence; it does not establish facts. Every citation is checked against the records sent."
+  const [railOpen, setRailOpen] = useState(initialRail);
+  const toggleRail = () =>
+    setRailOpen((v) => {
+      try {
+        window.localStorage.setItem(RAIL_KEY, v ? "0" : "1");
+      } catch {
+        // per-viewer convenience only
+      }
+      return !v;
+    });
+
+  const scopeControls = (
+    <>
+      <PillSelect
+        label="Ask Witness scope"
+        value={choice}
+        onChange={(v) => set({ scope: v === "workspace" ? undefined : v, inv: undefined }, { replace: true })}
+        options={[
+          ["workspace", "All findings"],
+          ["run", "A run"],
+          ["finding", "A finding"],
+        ]}
       />
+      {choice === "run" ? (
+        <ScopePicker
+          label="Run"
+          value={runId}
+          onChange={(v) => set({ run: v, inv: undefined })}
+          query={runs}
+          placeholder="Choose a run…"
+          options={(runs.data?.items ?? []).map((r: RunListItem) => [r.id, `${r.is_fixture ? "[FIXTURE] " : ""}${r.label ? truncate(r.label, 56) : r.id}`])}
+        />
+      ) : null}
+      {choice === "finding" ? (
+        <ScopePicker
+          label="Finding"
+          value={findingId}
+          onChange={(v) => set({ finding: v, inv: undefined })}
+          query={findings}
+          placeholder="Choose a finding…"
+          options={(findings.data?.items ?? []).map((f: FindingListItem) => [f.id, `${f.is_fixture ? "[FIXTURE] " : ""}${truncate(f.title, 64)} · ${f.severity}`])}
+        />
+      ) : null}
+    </>
+  );
 
-      <div className="mb-5 flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="label">Scope</span>
-          <SegmentedControl<ScopeChoice>
-            label="Ask Witness scope"
-            value={choice}
-            onChange={(v) => set({ scope: v === "workspace" ? undefined : v, inv: undefined }, { replace: true })}
-            options={[
-              { value: "workspace", label: "All findings" },
-              { value: "run", label: "A run" },
-              { value: "finding", label: "A finding" },
-            ]}
-          />
-        </div>
-        {choice === "run" ? (
-          <ScopePicker
-            label="Run"
-            value={runId}
-            onChange={(v) => set({ run: v, inv: undefined })}
-            query={runs}
-            placeholder="Choose a run…"
-            options={(runs.data?.items ?? []).map((r: RunListItem) => [r.id, `${r.is_fixture ? "[FIXTURE] " : ""}${r.label ? truncate(r.label, 56) : r.id}`])}
-          />
-        ) : null}
-        {choice === "finding" ? (
-          <ScopePicker
-            label="Finding"
-            value={findingId}
-            onChange={(v) => set({ finding: v, inv: undefined })}
-            query={findings}
-            placeholder="Choose a finding…"
-            options={(findings.data?.items ?? []).map((f: FindingListItem) => [f.id, `${f.is_fixture ? "[FIXTURE] " : ""}${truncate(f.title, 64)} · ${f.severity}`])}
-          />
-        ) : null}
+  const context =
+    choice === "run" && run ? (
+      <>
+        <FixtureBadge isFixture={run.is_fixture} compact />
+        <Link to={`/runs/${encodeURIComponent(run.id)}`} className="truncate font-medium text-fg-1 hover:text-fg-0 hover:underline">
+          {run.label ?? run.id}
+        </Link>
+      </>
+    ) : choice === "finding" && finding ? (
+      <>
+        <FixtureBadge isFixture={finding.is_fixture} compact />
+        <Link to={`/findings/${encodeURIComponent(finding.id)}`} className="truncate font-medium text-fg-1 hover:text-fg-0 hover:underline">
+          {finding.title}
+        </Link>
+        <SeverityBadge severity={finding.severity} />
+      </>
+    ) : null;
+
+  const pickerError = choice === "run" && runs.isError ? { e: runs.error, what: "runs" } : choice === "finding" && findings.isError ? { e: findings.error, what: "findings" } : null;
+
+  if (source) {
+    return (
+      <Conversation
+        key={source.key}
+        source={source}
+        selected={get("inv") ?? null}
+        onSelect={(id) => set({ inv: id }, { replace: true })}
+        scopeControls={scopeControls}
+        context={context}
+        railOpen={railOpen}
+        onToggleRail={toggleRail}
+      />
+    );
+  }
+  const what = choice === "run" ? "run" : "finding";
+  return (
+    <ChatFrame
+      railOpen={railOpen}
+      onToggleRail={toggleRail}
+      context={context}
+      rail={<p className="px-2 text-[12px] text-fg-2">Choose a {what} first.</p>}
+      composer={<ChatComposer value="" onChange={() => {}} onSubmit={() => {}} label={`Ask a question about this ${what}`} placeholder={`Choose a ${what} below…`} disabled leading={scopeControls} />}
+    >
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
+        <h2 className="text-[18px] font-semibold text-fg-0">Choose a {what} to ask about</h2>
+        <p className="text-[12.5px] text-fg-2">Pick it from the selector in the composer.</p>
+        {pickerError ? <ErrorState error={pickerError.e} what={pickerError.what} /> : null}
       </div>
-
-      {choice === "run" && run ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px]">
-          <span className="label">Investigating</span>
-          <FixtureBadge isFixture={run.is_fixture} />
-          <Link to={`/runs/${encodeURIComponent(run.id)}`} className="font-medium text-fg-0 hover:underline">
-            {run.label ?? run.id}
-          </Link>
-          <Mono>{run.id}</Mono>
-        </div>
-      ) : null}
-      {choice === "finding" && finding ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px]">
-          <span className="label">Investigating</span>
-          <FixtureBadge isFixture={finding.is_fixture} />
-          <Link to={`/findings/${encodeURIComponent(finding.id)}`} className="font-medium text-fg-0 hover:underline">
-            {finding.title}
-          </Link>
-          <SeverityBadge severity={finding.severity} />
-        </div>
-      ) : null}
-
-      {source ? (
-        <Conversation key={source.key} source={source} selected={get("inv") ?? null} onSelect={(id) => set({ inv: id }, { replace: true })} />
-      ) : (
-        <EmptyState title={choice === "run" ? "Choose a run to ask about" : "Choose a finding to ask about"}>
-          Answers in this scope use only that {choice === "run" ? "run's" : "finding's"} records.
-        </EmptyState>
-      )}
-    </div>
+    </ChatFrame>
   );
 }
 
@@ -256,24 +292,83 @@ function ScopePicker({
   placeholder: string;
   options: Array<[string, string]>;
 }) {
-  if (query.isError) return <ErrorState error={query.error} what={`${label.toLowerCase()}s`} />;
+  const all: Array<[string, string]> = [
+    ["", query.isPending ? "Loading…" : query.isError ? `Could not load ${label.toLowerCase()}s` : placeholder],
+    ...(value && !options.some(([v]) => v === value) ? ([[value, value]] as Array<[string, string]>) : []),
+    ...options,
+  ];
+  return <PillSelect label={label} value={value ?? ""} onChange={(v) => onChange(v || undefined)} options={all} disabled={query.isPending || query.isError} />;
+}
+
+/** Page layout: collapsible conversation rail + centered conversation column with a pinned composer. */
+function ChatFrame({
+  rail,
+  railOpen,
+  onToggleRail,
+  context,
+  headerAside,
+  composer,
+  children,
+}: {
+  rail: ReactNode;
+  railOpen: boolean;
+  onToggleRail: () => void;
+  context: ReactNode;
+  headerAside?: ReactNode;
+  composer: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="label">{label}</span>
-      <select aria-label={label} className="field max-w-[min(480px,100%)]" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)} disabled={query.isPending}>
-        <option value="">{query.isPending ? "Loading…" : placeholder}</option>
-        {value && !options.some(([v]) => v === value) ? <option value={value}>{value}</option> : null}
-        {options.map(([v, l]) => (
-          <option key={v} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className={`grid min-h-[calc(100dvh-7.5rem)] gap-4 ${railOpen ? "lg:grid-cols-[232px_minmax(0,1fr)]" : ""}`}>
+      {railOpen ? (
+        <nav aria-label="Conversations" className="flex min-h-0 flex-col gap-1 border-line lg:sticky lg:top-0 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto lg:border-r lg:pr-3">
+          {rail}
+        </nav>
+      ) : null}
+      <div className="flex min-w-0 flex-col">
+        <header className="mx-auto flex w-full max-w-[760px] items-center gap-2 pb-3">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-icon"
+            onClick={onToggleRail}
+            aria-expanded={railOpen}
+            aria-label={railOpen ? "Hide conversations" : "Show conversations"}
+            title={railOpen ? "Hide conversations" : "Show conversations"}
+          >
+            <Icon name={railOpen ? "chevronLeft" : "chevronRight"} size={14} />
+          </button>
+          <h1 className="text-[14px] font-semibold text-fg-0">Ask Witness</h1>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px]">{context}</div>
+          {headerAside}
+          <StatusPill kind="inferred">AI · advisory</StatusPill>
+        </header>
+        <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col">{children}</div>
+        <div className="sticky bottom-0 z-10 mx-auto w-full max-w-[760px] bg-gradient-to-t from-surface-0 from-70% to-transparent pt-4 pb-1">
+          {composer}
+          <p className="mt-1.5 text-center text-[11px] text-fg-2">{AI_FOOTNOTE}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function Conversation({ source, selected, onSelect }: { source: ConversationSource; selected: string | null; onSelect: (id: string | undefined) => void }) {
+function Conversation({
+  source,
+  selected,
+  onSelect,
+  scopeControls,
+  context,
+  railOpen,
+  onToggleRail,
+}: {
+  source: ConversationSource;
+  selected: string | null;
+  onSelect: (id: string | undefined) => void;
+  scopeControls: ReactNode;
+  context: ReactNode;
+  railOpen: boolean;
+  onToggleRail: () => void;
+}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const list = useQuery({ queryKey: source.listKey, queryFn: source.list, ...ONCE });
@@ -292,6 +387,7 @@ function Conversation({ source, selected, onSelect }: { source: ConversationSour
   const [extraIndex, setExtraIndex] = useState<ScopedEvidenceRef[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const askedHere = useRef(false);
 
   const ask = useMutation({
@@ -327,11 +423,6 @@ function Conversation({ source, selected, onSelect }: { source: ConversationSour
     ask.mutate(p);
   };
 
-  const onFormSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    submit(input);
-  };
-
   const turns = detail.data?.turns ?? [];
   useEffect(() => {
     if (askedHere.current) endRef.current?.scrollIntoView?.({ block: "nearest" });
@@ -364,158 +455,141 @@ function Conversation({ source, selected, onSelect }: { source: ConversationSour
     : undefined;
 
   const ai = detail.data?.ai;
-  const showPending = pending !== null;
+  const showPending = pending !== null && !turns.some((t) => t.client_request_id === pending.clientRequestId);
+  const loading = list.isPending || (investigationId !== null && detail.isPending);
+  const empty = !loading && !list.isError && !(investigationId && detail.isError) && turns.length === 0 && !showPending;
+  const cards = source.suggestions.slice(0, 4);
+  const more = [...source.suggestions.slice(4), ...source.investigatorQuestions];
+
+  const rail = (
+    <>
+      <button
+        type="button"
+        className="btn btn-sm mb-1 w-full justify-start gap-1.5"
+        aria-pressed={investigationId === null}
+        onClick={() => {
+          onSelect("new");
+          inputRef.current?.focus();
+        }}
+        disabled={ask.isPending}
+      >
+        <span aria-hidden="true">+</span> New chat
+      </button>
+      {list.isPending ? (
+        <SkeletonBlock lines={3} />
+      ) : list.isError ? (
+        <p className="px-2 text-[12px] text-fg-2">History unavailable.</p>
+      ) : items.length === 0 ? (
+        <p className="px-2 text-[12px] text-fg-2">None yet.</p>
+      ) : (
+        <ul className="space-y-0.5" aria-label="Investigation history">
+          {items.map((it) => {
+            const current = it.id === investigationId;
+            return (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  aria-current={current ? "true" : undefined}
+                  disabled={ask.isPending}
+                  onClick={() => onSelect(it.id)}
+                  title={it.last_question ?? it.id}
+                  className={`w-full rounded-md px-2 py-1.5 text-left text-[12.5px] transition-colors duration-[120ms] ${
+                    current ? "bg-surface-2 text-fg-0" : "text-fg-1 hover:bg-surface-2"
+                  }`}
+                >
+                  <span className="block truncate">{it.last_question ?? <Mono>{it.id}</Mono>}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-fg-2">
+                    <span className="font-mono">{it.turn_count}</span>
+                    {it.updated_at ? <Time iso={it.updated_at} /> : null}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-      <Section
-        title="Conversation"
-        description={<>Answers use only Kernel Witness records for {source.records}. Claim labels are assigned by Kernel Witness from the cited records, not by the model.</>}
-        actions={<StatusPill kind="inferred">AI · advisory</StatusPill>}
-      >
-        <div className="space-y-4" aria-live="polite">
-          {ai && !ai.available ? (
-            <Notice tone="unknown" title="ai& unavailable">
-              {ai.detail} Questions are still recorded, marked unanswered. Everything else in Kernel Witness works without AI.
-            </Notice>
-          ) : null}
-          {list.isPending ? (
-            <SkeletonBlock lines={4} />
-          ) : list.isError ? (
-            <ErrorState error={list.error} what="earlier investigations" />
-          ) : investigationId && detail.isPending ? (
-            <SkeletonBlock lines={4} />
-          ) : investigationId && detail.isError ? (
-            <div className="space-y-2">
-              <ErrorState error={detail.error} what="this investigation" />
-              <button type="button" className="btn" onClick={() => onSelect("new")}>
-                Start a new investigation
-              </button>
-            </div>
-          ) : turns.length === 0 && !showPending ? (
-            <p className="text-[12.5px] text-fg-2">No questions in this investigation yet. Pick a suggested question or write your own.</p>
-          ) : null}
-
-          {turns.map((t) => (
-            <TurnView key={t.id} turn={t} ev={ev} onRetry={submit} onFollowUp={submit} retrying={ask.isPending} onCreateSafeguard={createSafeguard} />
-          ))}
-
-          {showPending && !turns.some((t) => t.client_request_id === pending.clientRequestId) ? (
-            <div className="space-y-2">
-              <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-md border border-line-strong bg-surface-3 px-2 py-1.5 text-[12.5px] whitespace-pre-wrap">{pending.question}</div>
-              </div>
-              {ask.isPending ? (
-                <div role="status" className="rounded-md border border-line bg-surface-1 p-2 text-[12px] text-fg-1">
-                  Retrieving Kernel Witness records for {source.noun} and asking ai&… <span className="text-fg-2">(can take up to a minute)</span>
-                </div>
-              ) : ask.isError ? (
-                <div className="space-y-1.5">
-                  <AskError error={ask.error} />
-                  <div className="flex gap-1.5">
-                    <button type="button" className="btn" onClick={retryPending}>
-                      Retry
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => {
-                        setInput(pending.question);
-                        setPending(null);
-                        ask.reset();
-                      }}
-                    >
-                      Edit question
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <div ref={endRef} />
-        </div>
-
-        <div className="mt-5 border-t border-line pt-4">
-          <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Suggested questions">
-            {source.suggestions.map((q) => (
-              <button key={q} type="button" className="btn btn-sm" disabled={ask.isPending} onClick={() => submit(q, SUGGESTION_MODE[q])}>
-                {q}
-              </button>
-            ))}
-          </div>
-          {source.investigatorQuestions.length > 0 ? (
-            <details className="mb-2">
-              <summary className="cursor-pointer text-[11.5px] text-fg-2">More investigator questions</summary>
-              <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Investigator questions">
-                {source.investigatorQuestions.map((q) => (
-                  <button key={q} type="button" className="btn btn-sm" disabled={ask.isPending} onClick={() => submit(q)}>
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </details>
-          ) : null}
-          <p className="mb-2 text-[11.5px] text-fg-2">Answers are concise by default; use More detail or Explain simply on any answer for more.</p>
-          <form onSubmit={onFormSubmit} className="flex gap-1.5">
-            <input
-              aria-label={source.inputLabel}
-              className="field min-w-0 flex-1"
-              value={input}
-              maxLength={2000}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={investigationId ? "Ask a follow-up in this investigation…" : `Ask about ${source.noun}…`}
-              disabled={ask.isPending}
-            />
-            <button type="submit" className="btn btn-primary" disabled={!input.trim() || ask.isPending}>
-              {ask.isPending ? "Asking…" : "Ask"}
-            </button>
-          </form>
-        </div>
-      </Section>
-
-      <Section level={3} title="Investigations" description="Earlier conversations in this scope.">
-        <button type="button" className="btn btn-sm mb-2" aria-pressed={investigationId === null} onClick={() => onSelect("new")} disabled={ask.isPending}>
-          New investigation
-        </button>
-        {list.isPending ? (
-          <SkeletonBlock lines={3} />
+    <ChatFrame
+      rail={rail}
+      railOpen={railOpen}
+      onToggleRail={onToggleRail}
+      context={context}
+      composer={
+        <ChatComposer
+          inputRef={inputRef}
+          value={input}
+          onChange={setInput}
+          onSubmit={() => submit(input)}
+          label={source.inputLabel}
+          placeholder={investigationId ? "Ask a follow-up…" : `Ask about ${source.noun}…`}
+          sending={ask.isPending}
+          leading={scopeControls}
+        />
+      }
+    >
+      <div className="flex flex-1 flex-col gap-6 pb-4" aria-live="polite">
+        {ai && !ai.available ? (
+          <Notice tone="unknown" title="ai& unavailable">
+            {ai.detail} Questions are still recorded, marked unanswered.
+          </Notice>
+        ) : null}
+        {loading ? (
+          <SkeletonBlock lines={4} />
         ) : list.isError ? (
-          <p className="text-[12px] text-fg-2">History unavailable (see the error beside it).</p>
-        ) : items.length === 0 ? (
-          <p className="text-[12px] text-fg-2">None yet.</p>
-        ) : (
-          <ul className="space-y-1" aria-label="Investigation history">
-            {items.map((it) => {
-              const current = it.id === investigationId;
-              return (
-                <li key={it.id}>
-                  <button
-                    type="button"
-                    aria-current={current ? "true" : undefined}
-                    disabled={ask.isPending}
-                    onClick={() => onSelect(it.id)}
-                    className={`w-full rounded-md border px-2 py-1.5 text-left text-[12px] transition-colors duration-[120ms] ${
-                      current ? "border-accent/50 bg-surface-2 text-fg-0" : "border-transparent text-fg-1 hover:bg-surface-2"
-                    }`}
-                  >
-                    <span className="block truncate">{it.last_question ?? <Mono>{it.id}</Mono>}</span>
-                    <span className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-2">
-                      <span className="font-mono">
-                        {it.turn_count} turn{it.turn_count === 1 ? "" : "s"}
-                      </span>
-                      {it.updated_at ? <Time iso={it.updated_at} /> : null}
-                      {current ? <span className="text-accent">· open</span> : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
+          <ErrorState error={list.error} what="earlier investigations" />
+        ) : investigationId && detail.isError ? (
+          <div className="space-y-2">
+            <ErrorState error={detail.error} what="this investigation" />
+            <button type="button" className="btn btn-sm" onClick={() => onSelect("new")}>
+              New chat
+            </button>
+          </div>
+        ) : null}
 
+        {empty ? (
+          <div className="flex flex-1 flex-col justify-center gap-5 py-10">
+            <h2 className="text-center text-[20px] font-semibold tracking-tight text-fg-0">What do you want to know?</h2>
+            <SuggestionCards suggestions={cards} onPick={(q) => submit(q, SUGGESTION_MODE[q])} disabled={ask.isPending} />
+            {more.length > 0 ? (
+              <details className="text-center">
+                <summary className="cursor-pointer text-[11.5px] text-fg-2 hover:text-fg-1">More questions ({more.length})</summary>
+                <div className="mt-2 flex flex-wrap justify-center gap-1.5" role="group" aria-label="More suggested questions">
+                  {more.map((q) => (
+                    <button key={q} type="button" className="btn btn-sm" disabled={ask.isPending} onClick={() => submit(q, SUGGESTION_MODE[q])}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+
+        {turns.map((t) => (
+          <TurnView key={t.id} turn={t} ev={ev} onRetry={submit} onFollowUp={submit} retrying={ask.isPending} onCreateSafeguard={createSafeguard} />
+        ))}
+
+        {showPending ? (
+          <PendingTurn
+            question={pending.question}
+            sending={ask.isPending}
+            error={ask.isError ? <AskError error={ask.error} /> : null}
+            onRetry={retryPending}
+            onEdit={() => {
+              setInput(pending.question);
+              setPending(null);
+              ask.reset();
+              inputRef.current?.focus();
+            }}
+          />
+        ) : null}
+        <div ref={endRef} />
+      </div>
       {openId ? <EvidenceRefDrawer id={openId} evidenceRef={bundleIndex.get(openId)} onClose={() => setOpenId(null)} /> : null}
-    </div>
+    </ChatFrame>
   );
 }
 
@@ -525,14 +599,14 @@ function AskError({ error }: { error: unknown }) {
   if (e?.kind === "http" && (e.code === "ai_unavailable" || e.status === 503)) {
     return (
       <Notice tone="caution" title="ai& is unavailable">
-        {e.message} The records are unchanged; the rest of Kernel Witness works without ai&.
+        {e.message}
       </Notice>
     );
   }
   if (e?.kind === "http" && (e.code === "timeout" || e.status === 504)) {
     return (
       <Notice tone="caution" title="ai& request timed out">
-        Retrying sends the same request id, so the server returns the stored answer if it finished meanwhile.
+        Retry returns the stored answer if it finished meanwhile.
       </Notice>
     );
   }

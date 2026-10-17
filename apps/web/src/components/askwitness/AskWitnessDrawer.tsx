@@ -1,13 +1,13 @@
 import type { FindingDetailResponse, InvestigationTurn } from "@kw/schema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useMatch, useNavigate } from "react-router";
 import { ApiRequestError, newClientRequestId } from "../../api/client";
 import { queryKeys } from "../../api/queries";
 import { asBundleRef, citationHref, scopedApi, scopeKey, type AskScope, type ScopedAskBody, type ScopedEvidenceRef } from "../../api/scopedAsk";
 import { MutationError, SkeletonBlock } from "../states";
-import { Mono } from "../ui";
 import { TurnView, type EvidenceLookup, type FollowUpMode } from "./AnswerView";
+import { AI_FOOTNOTE, ChatComposer, PendingTurn, SuggestionCards } from "./ChatParts";
 import { EvidenceRefDrawer } from "./EvidenceRef";
 
 /**
@@ -35,10 +35,6 @@ export const SCOPE_SUGGESTIONS: Record<"run" | "workspace", readonly string[]> =
 };
 
 const SCOPE_LABEL: Record<ScopeChoice, string> = { finding: "This finding", run: "This run", workspace: "All findings" };
-const SCOPE_RECORDS: Record<"run" | "workspace", string> = {
-  run: "this run (its events, findings, coverage and policy)",
-  workspace: "all findings, runs, coverage, safeguards, verification results and today's digest",
-};
 
 interface Conversation {
   investigationId: string | null;
@@ -186,7 +182,7 @@ function AskWitnessDrawer({
 }) {
   const navigate = useNavigate();
   const [openId, setOpenId] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scope: AskScope | null = choice === "run" && runId ? { kind: "run", runId } : choice === "workspace" ? { kind: "workspace" } : null;
   const key = scope ? scopeKey(scope) : null;
@@ -286,10 +282,6 @@ function AskWitnessDrawer({
     ask.mutate(p);
   };
 
-  const onFormSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    submit(input);
-  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -353,23 +345,11 @@ function AskWitnessDrawer({
               </button>
             ))}
           </div>
-          {scope ? (
-            <p className="mt-1.5 text-[11px] text-fg-2">
-              Answers use only Kernel Witness records for {SCOPE_RECORDS[scope.kind]}
-              {scope.kind === "run" ? (
-                <>
-                  {" "}
-                  (<Mono>{scope.runId}</Mono>)
-                </>
-              ) : null}
-              ; AI interprets, it does not establish facts. Claim labels are assigned by Kernel Witness from the cited records, not by the model.
-            </p>
-          ) : null}
         </div>
 
         {choice === "finding" && findingId ? (
           <div className="space-y-2 p-3 text-[12.5px] text-fg-1">
-            <p>Questions about one finding are answered in the Ask Witness panel on the finding page, with that finding's evidence bundle.</p>
+            <p>Ask about one finding from its page.</p>
             <Link to={`/findings/${encodeURIComponent(findingId)}#ask-witness`} className="btn"
               onClick={() => {
                 onClose();
@@ -377,20 +357,20 @@ function AskWitnessDrawer({
                 window.requestAnimationFrame(() => {
                   const panel = document.getElementById("ask-witness");
                   panel?.scrollIntoView?.({ block: "start" });
-                  panel?.querySelector<HTMLInputElement>("input[aria-label]")?.focus();
+                  panel?.querySelector<HTMLElement>("textarea[aria-label], input[aria-label]")?.focus();
                 });
               }}
             >
               Go to this finding's Ask Witness panel
             </Link>
-            <p className="text-[11px] text-fg-2">Or switch scope above to ask about {runId ? "this finding's run or " : ""}all findings.</p>
+            <p className="text-[11px] text-fg-2">Or switch scope above.</p>
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3" aria-live="polite">
+            <div className="min-h-0 flex-1 space-y-5 overflow-auto p-3" aria-live="polite">
               {lastFailedAi ? (
-                <div role="status" className="hatch rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">
-                  ai& unavailable: {lastFailedAi} Questions are still recorded, marked unanswered. Everything else works without AI.
+                <div role="status" className="hatch rounded-md px-2 py-1.5 text-[12px] text-unknown">
+                  ai& unavailable: {lastFailedAi} Questions are still recorded, marked unanswered.
                 </div>
               ) : null}
               {loadingHistory ? <SkeletonBlock lines={4} /> : null}
@@ -417,7 +397,10 @@ function AskWitnessDrawer({
                 </div>
               ) : null}
               {turns.length === 0 && !showPending && !loadingHistory ? (
-                <p className="text-[12px] text-fg-2">No questions in this scope yet. Pick a suggested question or write your own.</p>
+                <div className="space-y-3 py-4">
+                  <h3 className="text-center text-[15px] font-semibold text-fg-0">What do you want to know?</h3>
+                  <SuggestionCards suggestions={suggestions} onPick={(q) => submit(q)} disabled={ask.isPending} />
+                </div>
               ) : null}
 
               {turns.map((t) => (
@@ -425,69 +408,31 @@ function AskWitnessDrawer({
               ))}
 
               {showPending ? (
-                <div className="space-y-2">
-                  <div className="flex justify-end">
-                    <div className="max-w-[85%] rounded-[3px] border border-line-strong bg-surface-3 px-2 py-1.5 text-[12.5px] whitespace-pre-wrap">{pending.question}</div>
-                  </div>
-                  {ask.isPending ? (
-                    <div role="status" className="rounded-[3px] border border-line bg-surface-1 p-2 text-[12px] text-fg-1">
-                      Retrieving Kernel Witness records for {scope?.kind === "run" ? "this run" : "all findings"} and asking ai&…{" "}
-                      <span className="text-fg-2">(can take up to a minute)</span>
-                    </div>
-                  ) : ask.isError ? (
-                    <div className="space-y-1.5">
-                      <AskError error={ask.error} />
-                      <div className="flex gap-1.5">
-                        <button type="button" className="btn" onClick={retryPending}>
-                          Retry
-                        </button>
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={() => {
-                            setInput(pending.question);
-                            setPending(null);
-                            ask.reset();
-                          }}
-                        >
-                          Edit question
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                <PendingTurn
+                  question={pending.question}
+                  sending={ask.isPending}
+                  error={ask.isError ? <AskError error={ask.error} /> : null}
+                  onRetry={retryPending}
+                  onEdit={() => {
+                    setInput(pending.question);
+                    setPending(null);
+                    ask.reset();
+                  }}
+                />
               ) : null}
             </div>
 
             <div className="border-t border-line p-3">
-              <div className="mb-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggested questions">
-                {suggestions.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
-                    disabled={ask.isPending}
-                    onClick={() => submit(q)}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={onFormSubmit} className="flex gap-1.5">
-                <input
-                  ref={inputRef}
-                  aria-label={scope?.kind === "run" ? "Ask a question about this run" : "Ask a question about all findings"}
-                  className="field min-w-0 flex-1"
-                  value={input}
-                  maxLength={2000}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={conv?.investigationId ? "Ask a follow-up in this scope…" : scope?.kind === "run" ? "Ask about this run…" : "Ask about your findings…"}
-                  disabled={ask.isPending}
-                />
-                <button type="submit" className="btn btn-primary" disabled={!input.trim() || ask.isPending}>
-                  {ask.isPending ? "Asking…" : "Ask"}
-                </button>
-              </form>
+              <ChatComposer
+                inputRef={inputRef}
+                value={input}
+                onChange={setInput}
+                onSubmit={() => submit(input)}
+                label={scope?.kind === "run" ? "Ask a question about this run" : "Ask a question about all findings"}
+                placeholder={conv?.investigationId ? "Ask a follow-up…" : scope?.kind === "run" ? "Ask about this run…" : "Ask about your findings…"}
+                sending={ask.isPending}
+              />
+              <p className="mt-1.5 text-center text-[11px] text-fg-2">{AI_FOOTNOTE}</p>
             </div>
           </>
         )}

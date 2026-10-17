@@ -414,3 +414,35 @@
     word-break: break-word;
   }
 }
+
+/* Landing hero: two small, slow-drifting glows behind the headline (decorative only). */
+.kw-hero-orb {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  filter: blur(56px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.kw-hero-orb-a {
+  background: radial-gradient(circle, rgba(139, 140, 246, 0.6) 0%, rgba(139, 140, 246, 0) 70%);
+  animation: kw-orb-a 14s ease-in-out infinite alternate;
+}
+.kw-hero-orb-b {
+  width: 190px;
+  height: 190px;
+  background: radial-gradient(circle, rgba(71, 201, 165, 0.38) 0%, rgba(71, 201, 165, 0) 70%);
+  animation: kw-orb-b 18s ease-in-out infinite alternate;
+}
+@keyframes kw-orb-a {
+  from { transform: translate(-90px, -18px) scale(1); }
+  to { transform: translate(70px, 22px) scale(1.12); }
+}
+@keyframes kw-orb-b {
+  from { transform: translate(80px, 28px) scale(1); }
+  to { transform: translate(-60px, -24px) scale(0.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kw-hero-orb { animation: none; }
+}

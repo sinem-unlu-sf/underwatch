@@ -157,4 +157,23 @@ describe("Ask Witness answer rendering", () => {
     expect(screen.getByText("Detailed · simple wording")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Follow-up on this answer" })).toBeNull();
   });
+
+  it("chat layout: summary and citation chips first, structured sections collapsed under Sources & reasoning, Copy action", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const { container } = render(<TurnView turn={turn()} ev={{ index, onOpen: () => {} }} onFollowUp={() => {}} />);
+    expect(screen.getByText("The read of .env was blocked.")).toBeInTheDocument();
+    const chips = screen.getByLabelText("Citations");
+    expect(within(chips).getByRole("button", { name: "evt_obs1" })).toBeInTheDocument();
+    expect(within(chips).queryByText("evt_made_up")).toBeNull();
+    const details = container.querySelector("details")!;
+    expect(details.open).toBe(false);
+    expect(within(details).getByText("Sources & reasoning")).toBeInTheDocument();
+    expect(details).toContainElement(screen.getByRole("region", { name: "Backed by observed evidence" }));
+    expect(details).toHaveTextContent(/2 not in bundle/);
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith("The read of .env was blocked.");
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
+  });
 });

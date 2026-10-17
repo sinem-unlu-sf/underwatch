@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { FixtureBadge } from "../badges";
 import { AskWitnessPanel, type AskWitnessFinding } from "./AskWitnessPanel";
 
@@ -13,11 +13,14 @@ export function AskAboutIssuePanel({
   onClose,
   finding,
   onCreateSafeguard,
+  header,
 }: {
   open: boolean;
   onClose: () => void;
   finding: AskWitnessFinding;
   onCreateSafeguard: (investigationId: string | null) => void;
+  /** Optional content above the chat (the Overview shows the finding's short read here). */
+  header?: ReactNode;
 }) {
   const [mounted, setMounted] = useState(open);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -79,9 +82,7 @@ export function AskAboutIssuePanel({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <p className="mb-2 text-[11.5px] text-fg-2">
-          Plain-language answers by default, grounded only in this finding's records. Use More detail or Explain simply on any answer. Closing keeps your conversation.
-        </p>
+        {header ? <div className="mb-3">{header}</div> : null}
         <AskWitnessPanel finding={finding} onCreateSafeguard={onCreateSafeguard} compact embedded maxSuggestions={4} />
       </div>
     </aside>

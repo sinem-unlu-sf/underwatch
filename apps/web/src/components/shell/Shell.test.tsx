@@ -163,7 +163,7 @@ function renderShell(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={page("Overview")} />
+            <Route path="overview" element={page("Overview")} />
             <Route path="findings" element={page("Findings")} />
             <Route path="findings/:id" element={page("Finding detail")} />
             <Route path="runs" element={page("Runs")} />
@@ -185,7 +185,7 @@ const primaryNav = () => screen.getByRole("navigation", { name: "Primary" });
 describe("app shell navigation", () => {
   it("lists every section, including Evidence Explorer, Ask Witness and Settings, and navigates", async () => {
     const user = userEvent.setup();
-    renderShell("/");
+    renderShell("/overview");
     const nav = primaryNav();
     for (const label of ["Overview", "Findings", "Agent Runs", "Evidence Explorer", "Ask Witness", "Safeguards", "Settings"]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
@@ -227,7 +227,7 @@ describe("app shell navigation", () => {
 describe("sidebar collapse", () => {
   it("collapses to the icon rail, keeps accessible labels, and remembers the choice", async () => {
     const user = userEvent.setup();
-    const { unmount } = renderShell("/");
+    const { unmount } = renderShell("/overview");
     const aside = screen.getByRole("complementary", { name: "Sidebar" });
     expect(aside).toHaveAttribute("data-collapsed", "false");
     await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
@@ -235,12 +235,12 @@ describe("sidebar collapse", () => {
     expect(within(primaryNav()).getByRole("link", { name: "Findings" })).toBeInTheDocument();
     expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe("1");
     unmount();
-    renderShell("/");
+    renderShell("/overview");
     expect(screen.getByRole("complementary", { name: "Sidebar" })).toHaveAttribute("data-collapsed", "true");
   });
 
   it("toggles with the [ key, but not while typing", async () => {
-    renderShell("/");
+    renderShell("/overview");
     const aside = screen.getByRole("complementary", { name: "Sidebar" });
     fireEvent.keyDown(window, { key: "[" });
     expect(aside).toHaveAttribute("data-collapsed", "true");
@@ -257,7 +257,7 @@ describe("sidebar collapse", () => {
 describe("command palette", () => {
   it("opens with Ctrl+K, searches real findings, runs and safeguards from the list APIs, and navigates", async () => {
     const user = userEvent.setup();
-    renderShell("/");
+    renderShell("/overview");
     expect(calls.some((c) => c.startsWith("/api/findings"))).toBe(false); // nothing fetched until opened
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
@@ -274,7 +274,7 @@ describe("command palette", () => {
 
   it("uses the runs API text search and supports keyboard selection", async () => {
     const user = userEvent.setup();
-    renderShell("/");
+    renderShell("/overview");
     await user.click(screen.getByRole("button", { name: "Search" }));
     const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
     await user.type(within(dialog).getByRole("combobox"), "refactor");
@@ -287,7 +287,7 @@ describe("command palette", () => {
 
   it("finds safeguards and shows an honest empty state; Escape closes", async () => {
     const user = userEvent.setup();
-    renderShell("/");
+    renderShell("/overview");
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Search Kernel Witness" });
     const input = within(dialog).getByRole("combobox");
@@ -304,14 +304,14 @@ describe("command palette", () => {
 describe("top bar", () => {
   it("shows the real workspace from GET /api/workspaces", async () => {
     workspaces = [{ id: "ws_demo", label: "demo-repo", root_path: "/tmp/demo-repo", kind: "demo", authorized_at: T0, status: "active" }];
-    renderShell("/");
+    renderShell("/overview");
     expect(await screen.findByRole("button", { name: "Workspace: demo-repo" })).toBeInTheDocument();
   });
 
   it("local session control clears the stored token after confirmation, leading to the permission-denied screen", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem(TOKEN_STORAGE_KEY, "secret-token-value");
-    renderShell("/");
+    renderShell("/overview");
     await screen.findByRole("heading", { name: "Overview page" });
     await user.click(screen.getByRole("button", { name: "Local session" }));
     await user.click(await screen.findByRole("button", { name: "Clear stored token…" }));

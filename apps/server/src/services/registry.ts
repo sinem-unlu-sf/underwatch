@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { registerAccountRoutes } from "../accounts/routes";
 import { createAuthService, registerAuthGuard, registerAuthRoutes } from "../auth";
 import type { ServerContext } from "../context";
 import { createGraphService, registerGraphRoutes, withGraphProjection } from "../graph";
@@ -38,6 +39,7 @@ export function registerAddendumGuard(app: FastifyInstance, ctx: ServerContext):
 
 export function registerAddendumRoutes(app: FastifyInstance, ctx: ServerContext): void {
   registerAuthRoutes(app, ctx);
+  registerAccountRoutes(app, ctx);
   registerWorkspaceRoutes(app, ctx);
   registerInvestigationRoutes(app, ctx);
   registerSafeguardRoutes(app, ctx);

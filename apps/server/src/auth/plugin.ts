@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { API_ROUTES, KW_CLIENT_HEADER, KW_CLIENT_HEADER_VALUE, type ApiError } from "@kw/schema";
 import { ALLOWED_ORIGINS } from "../config";
 import type { ServerContext } from "../context";
+import { accountForSessionToken } from "../accounts/store";
 import { bearerFrom, ensureAuthToken, tokensEqual } from "./token";
 
 const WEB_PORT = 4601;
@@ -26,11 +27,19 @@ function deny(reply: FastifyReply, status: 401 | 403, code: "unauthorized" | "fo
  *  1. Host must be 127.0.0.1/localhost on the API port or 4601 (else 403 forbidden) - blocks DNS rebinding.
  *  2. An Origin header, when present, must be http://127.0.0.1:4601 or http://localhost:4601 (else 403).
  *  3. Mutating requests (POST etc.) additionally need the KW_CLIENT_HEADER header (else 403) - blocks simple-form CSRF.
- *  4. Every route except /api/health needs `Authorization: Bearer <data/auth-token>` (else 401), compared in constant time.
+ *  4. Every route except /api/health, /api/accounts/signup and /api/accounts/login needs `Authorization: Bearer <token>`
+ *     (else 401): the API token from data/auth-token (constant-time compare) or a valid local-account session token
+ *     (looked up by sha256; unexpired and not revoked).
  * CORS preflight (OPTIONS) is left to @fastify/cors. The token is read once at startup and never returned by any route.
  */
 /** Requests that presented a valid bearer token on an otherwise open route (/api/health). */
 export const authenticatedRequests = new WeakSet<FastifyRequest>();
+
+/** Requests authenticated by a local-account session token (not the API token): request -> account id. */
+export const sessionAccounts = new WeakMap<FastifyRequest, string>();
+
+/** Reachable without a Bearer credential (Host/Origin/client-header checks still apply); signup checks the API token itself. */
+const OPEN_ACCOUNT_ROUTES = new Set<string>([API_ROUTES.accountSignup, API_ROUTES.accountLogin]);
 
 export function registerAuthGuard(app: FastifyInstance, ctx: ServerContext): void {
   const token = ensureAuthToken(ctx.paths.dataDir);
@@ -53,19 +62,29 @@ export function registerAuthGuard(app: FastifyInstance, ctx: ServerContext): voi
     }
 
     const presented = bearerFrom(req.headers.authorization);
-    if (pathname === API_ROUTES.health) {
+    const isApiToken = presented !== null && tokensEqual(presented, token);
+    if (pathname === API_ROUTES.health || OPEN_ACCOUNT_ROUTES.has(pathname)) {
       // Liveness stays open; details (version, DB) only for a valid token (routes.ts reads this mark).
-      if (presented !== null && tokensEqual(presented, token)) authenticatedRequests.add(req);
+      // Signup/login are open too; signup accepts this mark (the API token as Bearer) as its authorization.
+      if (isApiToken) authenticatedRequests.add(req);
+      else if (pathname === API_ROUTES.health && presented !== null && accountForSessionToken(ctx.db, presented, ctx.now()) !== null) {
+        authenticatedRequests.add(req);
+      }
       return;
     }
 
-    if (presented === null || !tokensEqual(presented, token)) {
-      return deny(
-        reply,
-        401,
-        "unauthorized",
-        "Missing or invalid API token. Open the app with `pnpm open` (or the URL in the server log).",
-      );
+    if (isApiToken) return;
+    // A valid, unexpired, unrevoked local-account session token is accepted alongside the API token.
+    const accountId = presented === null ? null : accountForSessionToken(ctx.db, presented, ctx.now());
+    if (accountId !== null) {
+      sessionAccounts.set(req, accountId);
+      return;
     }
+    return deny(
+      reply,
+      401,
+      "unauthorized",
+      "Missing or invalid API token. Open the app with `pnpm open` (or the URL in the server log).",
+    );
   });
 }

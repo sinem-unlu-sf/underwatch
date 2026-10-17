@@ -1,4 +1,6 @@
 import type { Event, EventCorrelation } from "@kw/schema";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../api/client";
 import { BasisBadge, Badge, OutcomeBadge, SourceBadge } from "../badges";
 import { Time } from "../ui";
 import { humanize, truncate } from "../../lib/format";
@@ -19,9 +21,30 @@ export type ComparisonRow = {
   outsideReportedId?: string | null;
   /** For a reported row: correlations whose observed event exists in the run but is not linked to this finding. */
   outsideObserved?: { total: number; matched: number };
+  /** Observed events shown on this row only because a stored "matched" correlation pairs them with the row's report. */
+  viaCorrelator?: Set<string>;
 };
 
-export function buildComparisonRows(events: readonly Event[], correlations: readonly EventCorrelation[] | null): ComparisonRow[] {
+/**
+ * The run's observed events, used to show observations that the correlator matched to one of this finding's reports
+ * even though the finding itself does not cite them. Read-only; nothing is linked or rewritten.
+ */
+export function useRunObservedIndex(events: readonly Event[]): Map<string, Event> | null {
+  const runId = events[0]?.run_id;
+  const q = useQuery({
+    queryKey: ["kw-run-observed-index", runId],
+    queryFn: () => api.runEvents(runId!, { basis: "observed" }),
+    enabled: !!runId,
+    staleTime: Infinity,
+  });
+  return q.data ? new Map(q.data.items.map((e) => [e.id, e])) : null;
+}
+
+export function buildComparisonRows(
+  events: readonly Event[],
+  correlations: readonly EventCorrelation[] | null,
+  runObserved: ReadonlyMap<string, Event> | null = null,
+): ComparisonRow[] {
   const byId = new Map(events.map((e) => [e.id, e]));
   const reported = events.filter((e) => e.basis === "reported");
   const observed = events.filter((e) => e.basis === "observed");
@@ -38,8 +61,25 @@ export function buildComparisonRows(events: readonly Event[], correlations: read
     });
     obs.forEach((o) => pairedObserved.add(o.id));
     const outsideCors = mine.filter((c) => c.observed_event_id && !byId.has(c.observed_event_id));
-    const outsideObserved = { total: outsideCors.length, matched: outsideCors.filter((c) => c.match === "matched").length };
-    rows.push({ key: r.id, reported: r, observed: [...new Map(obs.map((o) => [o.id, o])).values()], correlations: mine, outsideObserved });
+    // Matched pairs whose observed side the finding does not cite: show them, marked as correlator-linked.
+    const viaCorrelator = new Set<string>();
+    for (const c of outsideCors) {
+      const o = c.match === "matched" && c.observed_event_id ? runObserved?.get(c.observed_event_id) : undefined;
+      if (o && o.basis === "observed") {
+        obs.push(o);
+        viaCorrelator.add(o.id);
+      }
+    }
+    const hidden = outsideCors.filter((c) => !(c.observed_event_id && viaCorrelator.has(c.observed_event_id)));
+    const outsideObserved = { total: hidden.length, matched: hidden.filter((c) => c.match === "matched").length };
+    rows.push({
+      key: r.id,
+      reported: r,
+      observed: [...new Map(obs.map((o) => [o.id, o])).values()],
+      correlations: mine,
+      outsideObserved,
+      viaCorrelator,
+    });
   }
   for (const o of observed) {
     if (pairedObserved.has(o.id)) continue;
@@ -65,24 +105,43 @@ const OBS_WEIGHT: Partial<Record<Event["event_type"], number>> = {
   process_exec: 1,
 };
 
-export type KeyPair = { reported: Event | null; observed: Event | null; correlation: EventCorrelation | null; kind: "paired" | "reported_only" | "observed_only" };
+export type KeyPair = {
+  reported: Event | null;
+  observed: Event | null;
+  correlation: EventCorrelation | null;
+  kind: "paired" | "reported_only" | "observed_only";
+  /** True when the observed side is shown only through a stored matched correlation (the finding does not cite it). */
+  viaCorrelator?: boolean;
+};
 
-/** The single most relevant "agent said -> kernel saw" pair, from real rows only. Null when there is nothing to compare. */
-export function pickKeyPair(rows: readonly ComparisonRow[]): KeyPair | null {
+/**
+ * The single most relevant "agent said -> kernel saw" pair, from real rows only. Null when there is nothing to compare.
+ * `focusTargets` (resources the finding's own events concern) ranks observations of those resources first.
+ */
+export function pickKeyPair(rows: readonly ComparisonRow[], focusTargets: ReadonlySet<string> = new Set()): KeyPair | null {
   const paired = rows.filter((r) => r.reported && r.observed.length > 0);
   if (paired.length > 0) {
-    // Prefer the agent's own final claim, then the most outcome-revealing observation, then the latest.
+    // Prefer the agent's own final claim, then observations of the finding's resource, then the most outcome-revealing, then the latest.
     const scored = paired.flatMap((r) =>
       r.observed.map((o) => ({
         r,
         o,
-        score: (r.reported!.event_type === "agent_message" ? 100 : 0) + (OBS_WEIGHT[o.event_type] ?? 2) * 10,
+        score:
+          (r.reported!.event_type === "agent_message" ? 100 : 0) +
+          (o.target_resource && focusTargets.has(o.target_resource) ? 60 : 0) +
+          (OBS_WEIGHT[o.event_type] ?? 2) * 10,
         t: Date.parse(o.timestamp),
       })),
     );
     scored.sort((a, b) => b.score - a.score || b.t - a.t);
     const best = scored[0]!;
-    return { reported: best.r.reported, observed: best.o, correlation: best.r.correlations.find((c) => c.observed_event_id === best.o.id) ?? null, kind: "paired" };
+    return {
+      reported: best.r.reported,
+      observed: best.o,
+      correlation: best.r.correlations.find((c) => c.observed_event_id === best.o.id) ?? null,
+      kind: "paired",
+      viaCorrelator: best.r.viaCorrelator?.has(best.o.id) ?? false,
+    };
   }
   const obsOnly = rows.filter((r) => !r.reported && r.observed.length > 0);
   if (obsOnly.length > 0) {
@@ -135,6 +194,18 @@ function EventButton({ event: e, onOpen }: { event: Event; onOpen: (id: string) 
   );
 }
 
+const MAX_OBSERVED_PER_ROW = 4;
+
+/** Resources the finding's own events (reported, observed or derived) concern. */
+export function focusTargetsOf(events: readonly Event[]): Set<string> {
+  return new Set(events.map((e) => e.target_resource).filter((t): t is string => !!t));
+}
+
+function rankObserved(observed: readonly Event[], focus: ReadonlySet<string>): Event[] {
+  const score = (o: Event) => (o.target_resource && focus.has(o.target_resource) ? 60 : 0) + (OBS_WEIGHT[o.event_type] ?? 2) * 10;
+  return [...observed].sort((a, b) => score(b) - score(a) || Date.parse(a.timestamp) - Date.parse(b.timestamp));
+}
+
 function Gap({ text }: { text: string }) {
   return <div className="hatch rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">{text}</div>;
 }
@@ -150,7 +221,9 @@ export function ReportedVsObservedPanel({
   correlationStatus: "ready" | "loading" | "error";
   onOpenEvidence: (id: string) => void;
 }) {
-  const rows = buildComparisonRows(events, correlationStatus === "ready" ? correlations : null);
+  const runObserved = useRunObservedIndex(events);
+  const rows = buildComparisonRows(events, correlationStatus === "ready" ? correlations : null, runObserved);
+  const focus = focusTargetsOf(events);
   const noCor = correlationStatus !== "ready";
   return (
     <section id="td-comparison" aria-labelledby="td-comparison-title" className="rounded-md border border-line bg-surface-1" data-testid="reported-vs-observed">
@@ -209,9 +282,21 @@ export function ReportedVsObservedPanel({
                   <td className="px-3 py-2">
                     {row.observed.length > 0 ? (
                       <div className="space-y-1.5">
-                        {row.observed.map((o) => (
-                          <EventButton key={o.id} event={o} onOpen={onOpenEvidence} />
-                        ))}
+                        {rankObserved(row.observed, focus)
+                          .slice(0, MAX_OBSERVED_PER_ROW)
+                          .map((o) => (
+                            <div key={o.id}>
+                              <EventButton event={o} onOpen={onOpenEvidence} />
+                              {row.viaCorrelator?.has(o.id) ? (
+                                <p className="mt-0.5 text-[11px] text-fg-2">Linked by the correlator (derived, matched); not cited by this finding.</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        {row.observed.length > MAX_OBSERVED_PER_ROW ? (
+                          <p className="text-[11px] text-fg-2">
+                            +{row.observed.length - MAX_OBSERVED_PER_ROW} more matched observations in the run timeline.
+                          </p>
+                        ) : null}
                       </div>
                     ) : (
                       <Gap
@@ -269,9 +354,10 @@ export function AgentSaidKernelSaw({
   onOpenEvidence: (id: string) => void;
   onSeeComparison: () => void;
 }) {
+  const runObserved = useRunObservedIndex(events);
   if (correlationStatus === "loading") return null;
-  const rows = buildComparisonRows(events, correlationStatus === "ready" ? correlations : null);
-  const pair = pickKeyPair(rows);
+  const rows = buildComparisonRows(events, correlationStatus === "ready" ? correlations : null, runObserved);
+  const pair = pickKeyPair(rows, focusTargetsOf(events));
   return (
     <section aria-labelledby="agent-said-title" className="border-t border-line pt-3" data-testid="agent-said-kernel-saw">
       <h3 id="agent-said-title" className="label mb-1">
@@ -301,6 +387,7 @@ export function AgentSaidKernelSaw({
           {pair.correlation ? (
             <p className="mt-1 text-[11px] text-fg-2">
               Paired by the Kernel Witness correlator (derived): {humanize(pair.correlation.match)}, {pair.correlation.confidence} confidence.
+              {pair.viaCorrelator ? " The observed event is linked through this match; the finding itself does not cite it." : null}
             </p>
           ) : null}
         </>

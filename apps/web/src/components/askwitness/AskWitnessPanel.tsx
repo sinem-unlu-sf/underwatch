@@ -1,12 +1,13 @@
 import { ASK_WITNESS_INVESTIGATOR_QUESTIONS, ASK_WITNESS_SUGGESTED_QUESTIONS, type BundleEvidenceRef, type Severity } from "@kw/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiRequestError, api, newClientRequestId } from "../../api/client";
 import { queryKeys, useFindingInvestigations, useInvestigation } from "../../api/queries";
 import { FixtureBadge, SeverityBadge } from "../badges";
 import { ErrorState, MutationError, SkeletonBlock } from "../states";
 import { Panel } from "../ui";
 import { TurnView, type EvidenceLookup, type FollowUpMode } from "./AnswerView";
+import { AI_FOOTNOTE, ChatComposer, PendingTurn } from "./ChatParts";
 import { EvidenceRefDrawer } from "./EvidenceRef";
 
 /** Addendum C: two of the judge's questions imply a mode (plain language / more depth); the rest are concise. */
@@ -107,10 +108,6 @@ export function AskWitnessPanel({
     ask.mutate(p);
   };
 
-  const onFormSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    submit(input);
-  };
 
   const turns = detail.data?.turns ?? [];
   const index = useMemo(() => {
@@ -182,13 +179,10 @@ export function AskWitnessPanel({
           </span>
         ) : null}
       </div>
-      <p className="mb-2 text-[11px] text-fg-2">
-        Answers use only this finding's evidence bundle (redacted). Claim labels are assigned by Kernel Witness from the cited records, not by the model.
-      </p>
 
       {ai && !ai.available ? (
         <div role="status" className="hatch mb-2 rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">
-          ai& unavailable: {ai.detail} Questions are still recorded, marked unanswered. Everything else on this page works without AI.
+          ai& unavailable: {ai.detail} Questions are still recorded, marked unanswered.
         </div>
       ) : null}
 
@@ -204,7 +198,7 @@ export function AskWitnessPanel({
           ) : null}
         </p>
       ) : null}
-      <div className={`flex flex-col gap-3 ${expanded ? "" : "hidden"}`}>
+      <div className={`flex flex-col gap-5 ${expanded ? "" : "hidden"}`}>
         {list.isPending ? (
           <SkeletonBlock lines={3} />
         ) : list.isError ? (
@@ -214,7 +208,7 @@ export function AskWitnessPanel({
         ) : investigationId && detail.isError ? (
           <ErrorState error={detail.error} what="this investigation" />
         ) : turns.length === 0 && !pending ? (
-          <p className="text-[12px] text-fg-2">No questions asked about this finding yet. Pick a suggested question or write your own.</p>
+          <p className="text-[12px] text-fg-2">No questions yet.</p>
         ) : null}
 
         {turns.map((t) => (
@@ -230,38 +224,17 @@ export function AskWitnessPanel({
         ))}
 
         {pending ? (
-          <div className="space-y-2">
-            <div className="flex justify-end">
-              <div className="max-w-[85%] rounded-[3px] border border-line-strong bg-surface-3 px-2 py-1.5 text-[12.5px] whitespace-pre-wrap">
-                {pending.question}
-              </div>
-            </div>
-            {ask.isPending ? (
-              <div role="status" aria-live="polite" className="rounded-[3px] border border-line bg-surface-1 p-2 text-[12px] text-fg-1">
-                Retrieving this finding's evidence and asking ai&… <span className="text-fg-2">(can take up to a minute)</span>
-              </div>
-            ) : ask.isError ? (
-              <div className="space-y-1.5">
-                <MutationError error={ask.error} what="Asking Witness" />
-                <div className="flex gap-1.5">
-                  <button type="button" className="btn" onClick={retryPending}>
-                    Retry
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => {
-                      setInput(pending.question);
-                      setPending(null);
-                      ask.reset();
-                    }}
-                  >
-                    Edit question
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <PendingTurn
+            question={pending.question}
+            sending={ask.isPending}
+            error={ask.isError ? <MutationError error={ask.error} what="Asking Witness" /> : null}
+            onRetry={retryPending}
+            onEdit={() => {
+              setInput(pending.question);
+              setPending(null);
+              ask.reset();
+            }}
+          />
         ) : null}
         <div ref={endRef} />
       </div>
@@ -272,7 +245,7 @@ export function AskWitnessPanel({
             <button
               key={q}
               type="button"
-              className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+              className="rounded-full border border-line-strong bg-surface-2 px-2.5 py-0.5 text-left text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
               disabled={ask.isPending}
               onClick={() => submit(q, SUGGESTION_MODE[q])}
             >
@@ -290,7 +263,7 @@ export function AskWitnessPanel({
                 <button
                   key={q}
                   type="button"
-                  className="rounded-[5px] border border-line-strong bg-surface-2 px-2 py-0.5 text-left text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+                  className="rounded-full border border-line-strong bg-surface-2 px-2.5 py-0.5 text-left text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
                   disabled={ask.isPending}
                   onClick={() => submit(q, SUGGESTION_MODE[q])}
                 >
@@ -304,7 +277,7 @@ export function AskWitnessPanel({
               <button
                 key={q}
                 type="button"
-                className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+                className="rounded-full border border-line-strong bg-surface-2 px-2.5 py-0.5 text-left text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
                 disabled={ask.isPending}
                 onClick={() => submit(q)}
               >
@@ -313,21 +286,15 @@ export function AskWitnessPanel({
             ))}
           </div>
         </details>
-        <p className="mb-1.5 text-[11px] text-fg-2">Answers are concise by default; use More detail or Explain simply on any answer for more.</p>
-        <form onSubmit={onFormSubmit} className="flex gap-1.5">
-          <input
-            aria-label="Ask a question about this finding"
-            className="field min-w-0 flex-1"
-            value={input}
-            maxLength={2000}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={investigationId ? "Ask a follow-up about this finding…" : "Ask about this finding…"}
-            disabled={ask.isPending}
-          />
-          <button type="submit" className="btn btn-primary" disabled={!input.trim() || ask.isPending}>
-            {ask.isPending ? "Asking…" : "Ask"}
-          </button>
-        </form>
+        <ChatComposer
+          value={input}
+          onChange={setInput}
+          onSubmit={() => submit(input)}
+          label="Ask a question about this finding"
+          placeholder={investigationId ? "Ask a follow-up…" : "Ask about this finding…"}
+          sending={ask.isPending}
+        />
+        <p className="mt-1.5 text-center text-[11px] text-fg-2">{AI_FOOTNOTE}</p>
       </div>
 
       {openId ? <EvidenceRefDrawer id={openId} evidenceRef={index.get(openId)} onClose={() => setOpenId(null)} /> : null}

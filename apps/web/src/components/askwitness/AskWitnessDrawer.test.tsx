@@ -163,8 +163,7 @@ describe("Ask Witness drawer", () => {
     const d = drawer()!;
     expect(within(d).getByRole("radio", { name: "All findings" })).toHaveAttribute("aria-checked", "true");
     expect(within(d).queryByRole("radio", { name: "This run" })).toBeNull();
-    expect(d).toHaveTextContent("Answers use only Kernel Witness records for all findings");
-    expect(d).toHaveTextContent("AI interprets, it does not establish facts");
+    expect(d).toHaveTextContent("AI interprets records; it does not decide what happened");
     for (const q of SCOPE_SUGGESTIONS.workspace) expect(within(d).getByRole("button", { name: q })).toBeInTheDocument();
   });
 

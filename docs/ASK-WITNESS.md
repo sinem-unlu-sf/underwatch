@@ -70,7 +70,7 @@ pnpm TypeScript monorepo (strict TypeScript, ESM, Zod 4). Node >= 22.13; `node:s
   2. **Origin**, when present, must be `http://127.0.0.1:4601` or `http://localhost:4601`. Anything else gets 403.
   3. **Mutating requests** (anything other than GET, HEAD or OPTIONS) also need `x-kw-client: kw-web`. Without it they get 403.
   4. Every route except `/api/health` needs `Authorization: Bearer <token>`. The check is constant-time over sha256 digests. A missing or wrong token gets 401 `unauthorized`. CORS preflight (OPTIONS) is answered without a token.
-- The server logs one local line at startup: `Open Kernel Witness: http://127.0.0.1:4601/?token=...`. Running `pnpm open` reads `data/auth-token` and passes the same URL to the OS opener (`open` on macOS) as an argument, with no shell. It never prints the token.
+- The server logs one local line at startup: `Open Kernel Witness: http://127.0.0.1:4601/overview?token=...`. Running `pnpm open` reads `data/auth-token` and passes the same URL to the OS opener (`open` on macOS) as an argument, with no shell. It never prints the token.
 - The web client reads `?token=` and sends the bearer header (owner: WEB).
 - Tests use `createTestApp()`. Its `app.inject` adds the token, an allowed Host and (for POST) the web headers. `ctx.rawInject` sends a request without them, for the 401 and 403 tests.
 
@@ -149,7 +149,7 @@ Everything runs locally on the developer's Mac. Credentials stay in the server p
 
 | What | Where / env var | Default | Notes |
 | --- | --- | --- | --- |
-| Local API token | `data/auth-token` (mode 600) | generated on first start | `pnpm open` opens `http://127.0.0.1:4601/?token=...` without printing the token. The server logs the same URL once at startup. |
+| Local API token | `data/auth-token` (mode 600) | generated on first start | `pnpm open` opens `http://127.0.0.1:4601/overview?token=...` without printing the token. The server logs the same URL once at startup. |
 | ai& key | `AIAND_API_KEY` in the process env, else in `.env.local` at the repo root (`KW_ENV_FILE` to change the file) | none: Ask Witness records `ai_unavailable`; proposals use templates | Optional overrides: `AIAND_BASE_URL` (default `https://api.aiand.com/v1`, validated against `KW_AIAND_ALLOWED_HOSTS`; plain http only with `KW_ALLOW_INSECURE_AIAND_HTTP`), `AIAND_MODEL` (default `deepseek-ai/deepseek-v4-flash`), `AIAND_STRUCTURED_OUTPUT` (`json_schema`, `json_object` or `prompt_only`), `AIAND_TIMEOUT_MS`, `AIAND_REASONING_EFFORT`, `KW_INFERENCE_CACHE_DIR`. |
 | Neo4j | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, else the nearest `.env.neo4j` (`KW_NEO4J_ENV_FILE`) | not configured: the graph panel and retriever fall back to SQLite | Start it with `docker compose -f docker/compose.dev.yml up -d --wait` (container `kw-neo4j`, bolt on 7697). `KW_GRAPH=off` disables it. SQLite stays the system of record, and Neo4j is a rebuildable projection. |
 | Claude OAuth token (verification and supervised runs) | `~/.kernel-witness/claude-oauth-token` (`KW_CLAUDE_TOKEN_FILE`) | missing: runs are recorded as inconclusive or failed, never simulated | Mounted read-only into the per-run **credential broker** container only. The agent gets a per-run placeholder. |

@@ -25,7 +25,7 @@ import { SERVICE_VERSION, UI_ACTOR } from "./config";
 import { authenticatedRequests } from "./auth/plugin";
 import { checkOutput, parseInput } from "./http/validate";
 import { getEvidenceDetail } from "./repo/evidence";
-import { getFindingBrief, withBrief } from "./findings-brief/brief";
+import { getFindingBriefResponse, withBrief } from "./findings-brief/brief";
 import { getFindingDetail, listFindings, listRunFindings, updateFindingStatus } from "./repo/findings";
 import { getOverview } from "./repo/overview";
 import { getRunDetail, getRunEvents, listRuns } from "./repo/runs";
@@ -87,7 +87,7 @@ export function registerRoutes(app: FastifyInstance, ctx: RouteContext): void {
   // Addendum C: deterministic concise explanation of the same records (also embedded above as `brief`).
   app.get(API_ROUTES.findingBrief, async (req) => {
     const { id } = parseInput(IdParams, req.params, "params");
-    return checkOutput(FindingBriefResponse, { brief: getFindingBrief(db, id) }, v);
+    return checkOutput(FindingBriefResponse, getFindingBriefResponse(db, id), v);
   });
 
   app.post(API_ROUTES.findingStatus, async (req) => {

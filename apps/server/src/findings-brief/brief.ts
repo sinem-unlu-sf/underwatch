@@ -24,6 +24,7 @@ import {
   type PolicyRule,
   type SafeguardLifecycleStatus,
   type SafeguardType,
+  type ShortRead,
   type VerificationRunV2,
   type VerificationState,
 } from "@kw/schema";
@@ -34,6 +35,7 @@ import { getCoverage } from "../repo/runs";
 import { getFindingDetail } from "../repo/findings";
 import { getSafeguardRecord } from "../safeguards/store";
 import { getRunRow, listRunsForSafeguard } from "../verification/repo";
+import { buildShortRead, countRunFindings, listRunResourceEvents } from "./short-read";
 
 /** Stored safeguard plus its served (read-guarded) state and latest verification run. */
 export interface BriefSafeguardInfo {
@@ -47,7 +49,7 @@ export interface BriefSafeguardInfo {
 }
 
 export interface BriefInput {
-  detail: Omit<FindingDetailResponse, "brief">;
+  detail: Omit<FindingDetailResponse, "brief" | "short_read">;
   coverage: CoverageReport | null;
   safeguards: BriefSafeguardInfo[];
 }
@@ -56,7 +58,7 @@ export interface BriefInput {
 // Loading (read-only)
 // ---------------------------------------------------------------------------------------------------------------
 
-export function loadBriefInput(db: Db, detail: Omit<FindingDetailResponse, "brief">): BriefInput {
+export function loadBriefInput(db: Db, detail: Omit<FindingDetailResponse, "brief" | "short_read">): BriefInput {
   const safeguards: BriefSafeguardInfo[] = [];
   for (const sg of detail.safeguards) {
     const rec = getSafeguardRecord(db, sg.id);
@@ -79,10 +81,31 @@ export function getFindingBrief(db: Db, findingId: string): FindingBrief {
   return buildFindingBrief(loadBriefInput(db, getFindingDetail(db, findingId)));
 }
 
-/** Detail + brief. A brief that cannot be built never breaks the existing detail response (the field is optional). */
+/** Brief + short read for GET /api/findings/:id/brief. A short read that cannot be built is omitted (optional field). */
+export function getFindingBriefResponse(db: Db, findingId: string): { brief: FindingBrief; short_read?: ShortRead } {
+  const input = loadBriefInput(db, getFindingDetail(db, findingId));
+  const brief = buildFindingBrief(input);
+  const short_read = tryShortRead(db, input, brief);
+  return short_read ? { brief, short_read } : { brief };
+}
+
+function tryShortRead(db: Db, input: BriefInput, brief: FindingBrief): ShortRead | undefined {
+  try {
+    const run_resource_events = listRunResourceEvents(db, input.detail.run.id, brief.affected.resource);
+    return buildShortRead({ ...input, run_finding_count: countRunFindings(db, input.detail.run.id), run_resource_events }, brief);
+  } catch (err) {
+    console.error(`[kw] short read failed for ${input.detail.finding.id}: ${(err as Error).message}`);
+    return undefined;
+  }
+}
+
+/** Detail + brief + short read. Neither can break the existing detail response (both fields are optional). */
 export function withBrief(db: Db, detail: FindingDetailResponse): FindingDetailResponse {
   try {
-    return { ...detail, brief: buildFindingBrief(loadBriefInput(db, detail)) };
+    const input = loadBriefInput(db, detail);
+    const brief = buildFindingBrief(input);
+    const short_read = tryShortRead(db, input, brief);
+    return short_read ? { ...detail, brief, short_read } : { ...detail, brief };
   } catch (err) {
     console.error(`[kw] finding brief failed for ${detail.finding.id}: ${(err as Error).message}`);
     return detail;

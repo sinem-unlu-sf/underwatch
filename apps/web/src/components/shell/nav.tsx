@@ -9,7 +9,7 @@ export type NavIconName = "overview" | "findings" | "runs" | "evidence" | "ask" 
 export type NavItem = { to: string; label: string; icon: NavIconName; end: boolean; description: string };
 
 export const PRIMARY_NAV: readonly NavItem[] = [
-  { to: "/", label: "Overview", icon: "overview", end: true, description: "Current state and next actions" },
+  { to: "/overview", label: "Overview", icon: "overview", end: true, description: "Current state and next actions" },
   { to: "/findings", label: "Findings", icon: "findings", end: false, description: "Discrepancies between reported and observed behavior" },
   { to: "/runs", label: "Agent Runs", icon: "runs", end: false, description: "Captured coding-agent sessions and their events" },
   { to: "/evidence", label: "Evidence Explorer", icon: "evidence", end: false, description: "Observed events and evidence records" },
@@ -25,8 +25,9 @@ export const ALL_NAV: readonly NavItem[] = [...PRIMARY_NAV, ...SECONDARY_NAV];
 
 /** The nav section a pathname belongs to (detail pages belong to their list section). */
 export function sectionFor(pathname: string): NavItem | undefined {
+  // "/" is the public landing page (outside the shell); it still maps to Overview for older callers.
   if (pathname === "/" || pathname === "") return PRIMARY_NAV[0];
-  return ALL_NAV.find((n) => n.to !== "/" && (pathname === n.to || pathname.startsWith(`${n.to}/`)));
+  return ALL_NAV.find((n) => pathname === n.to || pathname.startsWith(`${n.to}/`));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -52,7 +53,7 @@ function load() {
 /** Records the query string of a section list page (only exact section roots, never detail pages). */
 export function rememberSectionSearch(pathname: string, search: string) {
   load();
-  const item = ALL_NAV.find((n) => n.to === pathname && n.to !== "/");
+  const item = ALL_NAV.find((n) => n.to === pathname && n.to !== "/overview");
   if (!item) return;
   const clean = search.startsWith("?") ? search : search ? `?${search}` : "";
   if ((memory.get(item.to) ?? "") === clean) return;

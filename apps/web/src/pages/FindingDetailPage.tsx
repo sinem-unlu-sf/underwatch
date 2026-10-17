@@ -20,6 +20,7 @@ import {
 } from "../components/badges";
 import { FindingActions } from "../components/FindingActions";
 import { BriefCard } from "../components/finding-brief/BriefCard";
+import { ShortRead } from "../components/short-read/ShortRead";
 import { KeyRelationshipsStrip } from "../components/finding-brief/KeyRelationshipsStrip";
 import { RelevantRelationship } from "../components/finding-brief/RelevantRelationship";
 import { SafeguardProgression } from "../components/finding-brief/SafeguardProgression";
@@ -197,25 +198,63 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
         <div className="flex min-w-0 flex-col gap-3">
           {view === "summary" ? (
             <>
-              <BriefCard
-                brief={data.brief}
-                safeguards={data.safeguards}
-                evidenceIndex={pageIndex}
-                onOpenEvidence={setOpenEvidence}
-                onShowFull={() => showFull()}
-                afterProblem={
-                  <>
-                    <AgentSaidKernelSaw
-                      events={data.related_events}
-                      correlations={correlations}
-                      correlationStatus={correlationStatus}
-                      onOpenEvidence={setOpenEvidence}
-                      onSeeComparison={() => showFull("td-comparison")}
-                    />
-                    <RelevantRelationship findingId={f.id} onOpenGraph={openGraph} onOpenEvidence={setOpenEvidence} />
-                  </>
-                }
-              />
+              {data.short_read ? (
+                <>
+                  {/* Short read (<= 150 words) is the Quick Read's main content; the longer brief stays one click away. */}
+                  <ShortRead
+                    shortRead={data.short_read}
+                    onOpenEvidence={setOpenEvidence}
+                    canOpenEvidence={(id) => pageIndex.has(id)}
+                    onShowFull={() => showFull()}
+                    onAsk={() => setAskOpen(true)}
+                    askLabel="Ask about this issue"
+                    afterFinding={
+                      <div className="flex flex-col gap-2">
+                        <AgentSaidKernelSaw
+                          events={data.related_events}
+                          correlations={correlations}
+                          correlationStatus={correlationStatus}
+                          onOpenEvidence={setOpenEvidence}
+                          onSeeComparison={() => showFull("td-comparison")}
+                        />
+                        <RelevantRelationship findingId={f.id} onOpenGraph={openGraph} onOpenEvidence={setOpenEvidence} />
+                      </div>
+                    }
+                  />
+                  <details className="rounded-md border border-line px-3 py-2">
+                    <summary className="cursor-pointer text-[12px] text-fg-1">Longer explanation: problem, why it matters, every fix step, evidence and uncertainty</summary>
+                    <div className="mt-2">
+                      <BriefCard
+                        brief={data.brief}
+                        safeguards={data.safeguards}
+                        evidenceIndex={pageIndex}
+                        onOpenEvidence={setOpenEvidence}
+                        onShowFull={() => showFull()}
+                      />
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <BriefCard
+                  brief={data.brief}
+                  safeguards={data.safeguards}
+                  evidenceIndex={pageIndex}
+                  onOpenEvidence={setOpenEvidence}
+                  onShowFull={() => showFull()}
+                  afterProblem={
+                    <>
+                      <AgentSaidKernelSaw
+                        events={data.related_events}
+                        correlations={correlations}
+                        correlationStatus={correlationStatus}
+                        onOpenEvidence={setOpenEvidence}
+                        onSeeComparison={() => showFull("td-comparison")}
+                      />
+                      <RelevantRelationship findingId={f.id} onOpenGraph={openGraph} onOpenEvidence={setOpenEvidence} />
+                    </>
+                  }
+                />
+              )}
               <SafeguardProgression safeguards={data.safeguards} onOpenSafeguards={() => showFull("safeguards")} />
               <KeyRelationshipsStrip findingId={f.id} onOpenGraph={openGraph} onOpenEvidence={setOpenEvidence} />
               <div className="flex flex-wrap items-center gap-2 rounded-md border border-line px-3 py-2 text-[12px]">

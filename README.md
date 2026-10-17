@@ -86,8 +86,12 @@ Settings shows the key source by name only, never the value.
 pnpm demo:reset   # with pnpm dev stopped: fresh DB + migrations, labeled fixtures, Neo4j re-projection,
                   # fresh disposable demo workspace, no leftover verification records
 pnpm dev          # API on 127.0.0.1:4600, UI on 127.0.0.1:4601
-pnpm open         # opens the UI with the local access token (data/auth-token); the token is not printed
+pnpm open         # opens the app at /overview with the local access token (data/auth-token); the token is not printed
 ```
+
+The UI root `http://127.0.0.1:4601/` is the public landing page (product overview, real screenshots, sign up / log in,
+live demo). The app itself starts at `/overview`; every other route (`/findings`, `/runs`, `/safeguards`, ...) is unchanged,
+and an old launch link to `/?token=...` still opens `/overview`.
 
 `pnpm demo:reset` refuses to run while the API is up (it never stops processes itself). `pnpm seed:fixtures` alone
 re-imports fixtures idempotently without deleting anything.

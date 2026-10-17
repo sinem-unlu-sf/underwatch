@@ -225,8 +225,15 @@ export function PermissionDenied({ message }: { message?: string }) {
       <div className="flex items-center gap-1.5 font-semibold text-warn"><Icon name="alertCircle" size={14} />Permission denied</div>
       <p className="mt-1 text-fg-1">
         The Kernel Witness API refused this request{hadToken ? " with the stored access token" : " because no access token was sent"}. Open the app
-        with the link the server prints at startup (run <Cmd>pnpm open</Cmd>, or copy the <Cmd>http://127.0.0.1:4601/?token=…</Cmd> link from the
+        with the link the server prints at startup (run <Cmd>pnpm open</Cmd>, or copy the <Cmd>http://127.0.0.1:4601/overview?token=…</Cmd> link from the
         server log). The token is read once from the link, kept in this browser only, and removed from the address bar.
+      </p>
+      <p className="mt-1.5 text-fg-1">
+        Or use a local account:{" "}
+        {/* Plain links (not router Links) so this screen also works where it renders outside the router. */}
+        <a href="/login">Log in</a>
+        {" · "}
+        <a href="/signup">Sign up</a>
       </p>
       {message ? <p className="mt-1 font-mono text-[11px] text-fg-2">{message}</p> : null}
       <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2">

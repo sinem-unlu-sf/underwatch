@@ -20,7 +20,8 @@ if (!/^[0-9a-f]{64}$/.test(token)) {
   process.exit(1);
 }
 
-const url = `http://127.0.0.1:4601/?token=${token}`;
+// "/" is the public landing page; the app (Overview) lives at /overview.
+const url = `http://127.0.0.1:4601/overview?token=${token}`;
 const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
 execFile(opener, [url], (err) => {
   if (err) {
@@ -28,5 +29,5 @@ execFile(opener, [url], (err) => {
     console.error(`Could not launch a browser (${opener}, code ${String(err.code ?? "unknown")}). Copy the "Open Kernel Witness" URL from the server log instead.`);
     process.exit(1);
   }
-  console.log("Opened Kernel Witness at http://127.0.0.1:4601/ (token passed to the browser, not printed).");
+  console.log("Opened Kernel Witness at http://127.0.0.1:4601/overview (token passed to the browser, not printed).");
 });

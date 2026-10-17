@@ -10,8 +10,10 @@ import {
   type EvidenceSupport,
   type InvestigationTurn,
 } from "@kw/schema";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Badge, type Tone } from "../badges";
+import { Icon } from "../ds/Icon";
+import { UserBubble } from "./ChatParts";
 import { EvidenceChip, InvalidIdChip } from "./EvidenceRef";
 
 /**
@@ -293,7 +295,52 @@ const ERROR_TITLE: Record<string, string> = {
   invalid_output: "ai& returned an invalid answer",
 };
 
-/** One recorded turn: the question, then the answer or the recorded failure. */
+function InsufficientLine({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div role="status" className="hatch rounded-md px-2 py-1 text-[12px] text-unknown">
+      Insufficient evidence: the records sent do not support a definitive answer. Treat the summary as tentative.
+    </div>
+  );
+}
+
+/** Unique in-bundle citations across the answer, in order of first appearance (invalid ids are never chips). */
+function answerCitations(answer: AskWitnessAnswer, index: ReadonlyMap<string, BundleEvidenceRef>): string[] {
+  const seen = new Set<string>();
+  const add = (id: string) => {
+    if (index.has(id)) seen.add(id);
+  };
+  for (const c of [...answer.verified_facts, ...answer.hypotheses]) c.evidence_ids.forEach(add);
+  return [...seen];
+}
+
+const MAX_CHIPS = 6;
+
+function CopyAnswer({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+    window.setTimeout(() => setState("idle"), 1600);
+  };
+  return (
+    <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={() => void copy()} title="Copy the summary">
+      <Icon name={state === "copied" ? "check" : state === "failed" ? "x" : "copy"} size={12} />
+      <span aria-live="polite">{state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy"}</span>
+    </button>
+  );
+}
+
+/**
+ * One recorded turn, chat style: the question as a compact right-aligned bubble; the answer as plain text (summary
+ * first), a row of citation chips, and a collapsed "Sources & reasoning" disclosure holding every structured section
+ * with its Kernel Witness-assigned label and the citation check. Tiny actions underneath.
+ */
 export function TurnView({
   turn,
   ev,
@@ -313,47 +360,66 @@ export function TurnView({
   const failed = turn.answer === null;
   const depth = turn.depth ?? "concise";
   const style = turn.style ?? "standard";
+  const answer = turn.answer;
+  const chips = answer ? answerCitations(answer, ev.index) : [];
   return (
-    <article className="space-y-2" aria-label={`Question: ${turn.question}`}>
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-[3px] border border-line-strong bg-surface-3 px-2 py-1.5 text-[12.5px] whitespace-pre-wrap">{turn.question}</div>
-      </div>
-      <div className="rounded-[3px] border border-line bg-surface-1 p-2">
-        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-2">
-          <Badge tone="focus" title="Advisory interpretation stored separately from evidence. It is never an event record and never changes a status.">
-            AI-generated - interprets evidence, does not establish facts
-          </Badge>
-          <span className="font-mono">model {turn.model}</span>
-          <span className="font-mono">prompt {turn.prompt_version}</span>
-          <span className="font-mono">{turn.evidence_ids.length} evidence items sent</span>
-          <Badge tone="muted" title="Answer depth and wording requested for this turn. The evidence and citation checks are the same in every mode.">
-            {depth === "detailed" ? "Detailed" : "Concise"}
-            {style === "simple" ? " · simple wording" : ""}
-          </Badge>
-        </div>
+    <article className="kw-fade-in space-y-2" aria-label={`Question: ${turn.question}`}>
+      <UserBubble>{turn.question}</UserBubble>
+      <div className="space-y-2">
         {failed ? (
-          <div role="alert" className="rounded-[3px] border border-warn/50 bg-warn/10 p-2">
-            <div className="font-medium text-warn">{turn.error ? (ERROR_TITLE[turn.error.code] ?? "ai& request failed") : "No answer recorded"}</div>
-            <p className="mt-0.5 text-[12px] text-fg-1">
-              {turn.error?.message ?? "The request failed."} The evidence is unchanged; the rest of Kernel Witness works without ai&.
-            </p>
-            {turn.error?.code === "not_configured" ? (
-              <p className="mt-0.5 text-[11px] text-fg-2">Set AIAND_API_KEY in .env.local on the server, then restart it.</p>
-            ) : null}
+          <div role="alert" className="rounded-md border border-warn/50 bg-warn/10 px-2.5 py-2">
+            <div className="text-[12.5px] font-medium text-warn">{turn.error ? (ERROR_TITLE[turn.error.code] ?? "ai& request failed") : "No answer recorded"}</div>
+            <p className="mt-0.5 text-[12px] text-fg-1">{turn.error?.message ?? "The request failed."} The records are unchanged.</p>
+            {turn.error?.code === "not_configured" ? <p className="mt-0.5 text-[11px] text-fg-2">Set AIAND_API_KEY in .env.local on the server, then restart it.</p> : null}
             {onRetry ? (
-              <button type="button" className="btn mt-1.5" onClick={() => onRetry(turn.question, { depth, style })} disabled={retrying}>
+              <button type="button" className="btn btn-sm mt-1.5" onClick={() => onRetry(turn.question, { depth, style })} disabled={retrying}>
                 {retrying ? "Retrying…" : "Retry"}
               </button>
             ) : null}
           </div>
         ) : (
           <>
-            <AnswerBody answer={turn.answer!} ev={ev} onCreateSafeguard={onCreateSafeguard} />
+            <p className="text-[13.5px] leading-6 whitespace-pre-wrap text-fg-0">{answer!.summary}</p>
+            <InsufficientLine show={answer!.insufficient_evidence} />
+            <ActionClaimFlags flags={answer!.action_claim_flags ?? []} />
+            {chips.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1" aria-label="Citations">
+                {chips.slice(0, MAX_CHIPS).map((id) => (
+                  <EvidenceChip key={id} id={id} evidenceRef={ev.index.get(id)} onOpen={ev.onOpen} />
+                ))}
+                {chips.length > MAX_CHIPS ? <span className="text-[11px] text-fg-2">+{chips.length - MAX_CHIPS} in sources</span> : null}
+              </div>
+            ) : null}
+          </>
+        )}
+        <details className="group rounded-md text-[12px]">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11.5px] text-fg-2 select-none hover:text-fg-1 [&::-webkit-details-marker]:hidden">
+            <Icon name="chevronRight" size={11} className="transition-transform duration-[120ms] group-open:rotate-90" />
+            Sources &amp; reasoning
+          </summary>
+          <div className="mt-2 space-y-3 border-l border-line pl-3">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-fg-2">
+              <Badge tone="focus" title="Advisory interpretation stored separately from evidence. It is never an event record and never changes a status.">
+                AI-generated - interprets evidence, does not establish facts
+              </Badge>
+              <span className="font-mono">model {turn.model}</span>
+              <span className="font-mono">prompt {turn.prompt_version}</span>
+              <span className="font-mono">{turn.evidence_ids.length} evidence items sent</span>
+              <Badge tone="muted" title="Answer depth and wording requested for this turn. The evidence and citation checks are the same in every mode.">
+                {depth === "detailed" ? "Detailed" : "Concise"}
+                {style === "simple" ? " · simple wording" : ""}
+              </Badge>
+            </div>
+            {answer ? <AnswerBody answer={answer} ev={ev} onCreateSafeguard={onCreateSafeguard} inChat /> : null}
+          </div>
+        </details>
+        {answer ? (
+          <div className="flex flex-wrap items-center gap-0.5 text-fg-2">
             {onFollowUp ? (
-              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-line pt-2" role="group" aria-label="Follow-up on this answer">
+              <div className="flex flex-wrap gap-0.5" role="group" aria-label="Follow-up on this answer">
                 <button
                   type="button"
-                  className="btn"
+                  className="btn btn-ghost btn-sm"
                   disabled={retrying}
                   title="Ask again in this investigation with a detailed answer (same evidence, same citation checks)"
                   onClick={() => onFollowUp(followUpQuestion("detail", turn.question), { depth: "detailed", style })}
@@ -362,7 +428,7 @@ export function TurnView({
                 </button>
                 <button
                   type="button"
-                  className="btn"
+                  className="btn btn-ghost btn-sm"
                   disabled={retrying}
                   title="Ask again in this investigation in plain language (same evidence, same citation checks)"
                   onClick={() => onFollowUp(followUpQuestion("simple", turn.question), { depth, style: "simple" })}
@@ -371,8 +437,9 @@ export function TurnView({
                 </button>
               </div>
             ) : null}
-          </>
-        )}
+            <CopyAnswer text={answer.summary} />
+          </div>
+        ) : null}
       </div>
     </article>
   );

@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Link, useLocation, matchPath } from "react-router";
+import { Link, useLocation, useNavigate, matchPath } from "react-router";
+import { accountQueryKeys, accountsApi } from "../../api/accounts";
 import { getToken, onTokenChange, setToken } from "../../api/auth";
 import { ApiRequestError, api, isPermissionDenied } from "../../api/client";
 import { queryKeys, useAuthCheck, useSettingsStatus, useWorkspaces } from "../../api/queries";
 import { AskWitnessLauncher } from "../askwitness/AskWitnessDrawer";
-import { Icon, Kbd } from "../ds";
+import { Button, Icon, Kbd } from "../ds";
 import { ShellIcon, sectionFor, sectionHref } from "./nav";
 import type { SidebarState } from "./Sidebar";
 
@@ -262,67 +263,128 @@ function useStoredToken(): boolean {
 
 export function SessionControl() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const auth = useAuthCheck();
   const hasToken = useStoredToken();
   const [confirming, setConfirming] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  // GET /api/accounts/me: a stored session token belongs to a local account; the local API token (or none) does not.
+  const me = useQuery({ queryKey: accountQueryKeys.me, queryFn: accountsApi.me, enabled: hasToken, retry: false });
+  const user = hasToken ? (me.data?.user ?? null) : null;
   const mode = auth.data?.mode;
+
+  const finishLogout = (close: () => void) => {
+    setToken(null);
+    qc.removeQueries({ queryKey: accountQueryKeys.me });
+    setConfirming(false);
+    close();
+    void qc.invalidateQueries();
+    navigate("/login");
+  };
+  const logout = async (close: () => void) => {
+    setLogoutError(null);
+    setLoggingOut(true);
+    try {
+      await accountsApi.logout();
+      finishLogout(close);
+    } catch (err) {
+      // 401: the session already expired or was revoked server-side; there is nothing left to end.
+      if (err instanceof ApiRequestError && err.kind === "http" && err.status === 401) finishLogout(close);
+      else setLogoutError(err instanceof ApiRequestError && err.kind === "unreachable" ? "The API is not reachable; the session was not ended." : `Log out failed: ${(err as Error).message}`);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <Popover
-      label="Local session"
+      label={user ? `Account: ${user.name}` : "Local session"}
       trigger={
         <>
           <ShellIcon name="user" size={14} />
-          <span className="hidden text-[12px] xl:inline">Local session</span>
+          <span className="hidden max-w-[140px] truncate text-[12px] xl:inline">{user ? user.name : "Local session"}</span>
         </>
       }
     >
-      {(close) => (
-        <div>
-          <div className="label mb-1">Local session</div>
-          <p>
-            Kernel Witness runs on this machine; there is no account. {mode === "token"
-              ? "The API requires the access token from the server's startup link."
-              : mode === "local_loopback"
-                ? "The API accepts loopback requests from this machine."
-                : auth.error
-                  ? "The API refused or did not answer the access check."
-                  : "Checking API access…"}
-          </p>
-          <p className="mt-1.5 flex items-center gap-1 text-fg-2">
-            <Icon name={hasToken ? "check" : "minus"} size={12} />
-            {hasToken ? "An access token is stored in this browser." : "No access token is stored in this browser."}
-          </p>
-          {hasToken ? (
-            confirming ? (
-              <div className="mt-2.5 rounded-md border border-line-strong p-2">
-                <p className="text-fg-0">Clear the stored token?</p>
-                <p className="mt-0.5 text-fg-2">If the server requires a token, every page shows Permission denied until you paste it again or reopen the startup link.</p>
-                <div className="mt-2 flex gap-1.5">
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-sm"
-                    onClick={() => {
-                      setToken(null);
-                      setConfirming(false);
-                      close();
-                      void qc.invalidateQueries();
-                    }}
-                  >
-                    Clear token
-                  </button>
-                  <button type="button" className="btn btn-sm" onClick={() => setConfirming(false)}>
-                    Cancel
-                  </button>
+      {(close) =>
+        user ? (
+          <div>
+            <div className="label mb-1">Signed in</div>
+            <p className="truncate font-medium text-fg-0" title={user.name}>
+              {user.name}
+            </p>
+            <p className="truncate font-mono text-[11.5px] text-fg-2" title={user.email}>
+              {user.email}
+            </p>
+            <p className="mt-1.5 text-fg-2">Local account on this Kernel Witness server.</p>
+            {logoutError ? (
+              <p role="alert" className="mt-2 text-[12px] text-danger">
+                {logoutError}
+              </p>
+            ) : null}
+            <div className="mt-2.5 flex gap-1.5">
+              <Button size="sm" loading={loggingOut} loadingText="Logging out…" onClick={() => void logout(close)}>
+                Log out
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="label mb-1">Local session</div>
+            <p>
+              Kernel Witness runs on this machine; you are not signed in to a local account. {mode === "token"
+                ? "The API requires the access token from the server's startup link or a signed-in account."
+                : mode === "local_loopback"
+                  ? "The API accepts loopback requests from this machine."
+                  : auth.error
+                    ? "The API refused or did not answer the access check."
+                    : "Checking API access…"}
+            </p>
+            <p className="mt-1.5 flex items-center gap-1 text-fg-2">
+              <Icon name={hasToken ? "check" : "minus"} size={12} />
+              {hasToken ? "An access token is stored in this browser." : "No access token is stored in this browser."}
+            </p>
+            <p className="mt-1.5 flex gap-3 text-[12px]">
+              <Link to="/login" onClick={close}>
+                Log in
+              </Link>
+              <Link to="/signup" onClick={close}>
+                Sign up
+              </Link>
+            </p>
+            {hasToken ? (
+              confirming ? (
+                <div className="mt-2.5 rounded-md border border-line-strong p-2">
+                  <p className="text-fg-0">Clear the stored token?</p>
+                  <p className="mt-0.5 text-fg-2">If the server requires a token, every page shows Permission denied until you paste it again or reopen the startup link.</p>
+                  <div className="mt-2 flex gap-1.5">
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => {
+                        setToken(null);
+                        setConfirming(false);
+                        close();
+                        void qc.invalidateQueries();
+                      }}
+                    >
+                      Clear token
+                    </button>
+                    <button type="button" className="btn btn-sm" onClick={() => setConfirming(false)}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <button type="button" className="btn btn-sm mt-2.5" onClick={() => setConfirming(true)}>
-                Clear stored token…
-              </button>
-            )
-          ) : null}
-        </div>
-      )}
+              ) : (
+                <button type="button" className="btn btn-sm mt-2.5" onClick={() => setConfirming(true)}>
+                  Clear stored token…
+                </button>
+              )
+            ) : null}
+          </div>
+        )
+      }
     </Popover>
   );
 }
