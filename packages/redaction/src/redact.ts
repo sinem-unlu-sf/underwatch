@@ -1,4 +1,5 @@
 import {
+  type CustomPattern,
   DEFAULT_SYNTHETIC_REGISTRY,
   DETECTORS,
   DETECTOR_CONFIDENCE,
@@ -27,6 +28,8 @@ export interface RedactOptions {
   hexEntropyThreshold?: number;
   /** Minimum token length for the high-entropy detector. */
   entropyMinLength?: number;
+  /** Operator-supplied extra patterns (see parseRedactionConfig / redactionOptionsFromEnv). Reported as "custom_pattern". */
+  customPatterns?: readonly CustomPattern[];
   /** Run only these detectors. */
   detectors?: readonly DetectorId[];
   /** Skip these detectors. */
@@ -120,6 +123,7 @@ function detectorContext(opts: RedactOptions): DetectorContext {
   return {
     registry: opts.registry ?? DEFAULT_SYNTHETIC_REGISTRY,
     knownSecrets: opts.knownSecrets ?? [],
+    customPatterns: opts.customPatterns ?? [],
     entropyThreshold: opts.entropyThreshold ?? DEFAULT_ENTROPY_THRESHOLD,
     hexEntropyThreshold: opts.hexEntropyThreshold ?? DEFAULT_HEX_ENTROPY_THRESHOLD,
     entropyMinLength: opts.entropyMinLength ?? DEFAULT_ENTROPY_MIN_LENGTH,
@@ -247,4 +251,161 @@ export function scanForLeaks(payload: string, opts: Omit<RedactOptions, "detecto
 /** Map a redaction result onto the schema's Evidence.redaction_status vocabulary. */
 export function toEvidenceRedactionStatus(r: { status: "clean" | "redacted" }): "no_secrets_detected" | "redacted" {
   return r.status === "clean" ? "no_secrets_detected" : "redacted";
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Fail-closed redaction for storage boundaries
+
+/** Stored INSTEAD of the original text when redaction itself fails. The original is never kept. */
+export const REDACTION_FAILED_PLACEHOLDER = "[REDACTION_FAILED]";
+
+/** Per-record outcome. "failed" means the stored value is REDACTION_FAILED_PLACEHOLDER. */
+export type SafeRedactStatus = "clean" | "redacted" | "failed";
+
+export interface SafeRedactResult {
+  text: string;
+  status: SafeRedactStatus;
+  /** Detectors that fired (never the matched values). */
+  detectors: DetectorId[];
+}
+
+export interface SafeRedactOptions extends RedactOptions {
+  /**
+   * Return the input unchanged when nothing was found (default false). Use for a SECOND pass over text that may already
+   * carry placeholders from an earlier pass, so marker escaping does not mangle them; a first pass over raw input should
+   * leave this off so planted fake markers are escaped.
+   */
+  keepCleanTextVerbatim?: boolean;
+  /** Called on failure with a description that never contains the input text. */
+  onFailure?: (info: { error: string }) => void;
+  /**
+   * Inputs longer than this (UTF-16 units) are cut at a whitespace boundary, the head is redacted and the tail is
+   * WITHHELD (replaced by a marker, never stored). Bounds the synchronous cost of one call. Default 1,000,000.
+   */
+  maxLength?: number;
+}
+
+export const DEFAULT_SAFE_REDACT_MAX_LENGTH = 1_000_000;
+
+/** Appended in place of the withheld tail of an over-long input. */
+export function withheldTailMarker(chars: number): string {
+  return `[REDACTION_WITHHELD: ${chars} more characters not stored]`;
+}
+
+/**
+ * Redact for persistence: never throws and FAILS CLOSED. If any detector throws (or the input is not a string), the
+ * result is REDACTION_FAILED_PLACEHOLDER with status "failed"; the original text is never returned.
+ */
+export function safeRedact(text: string, opts: SafeRedactOptions = {}): SafeRedactResult {
+  try {
+    if (typeof text !== "string") throw new TypeError(`expected string, got ${typeof text}`);
+    const max = opts.maxLength ?? DEFAULT_SAFE_REDACT_MAX_LENGTH;
+    if (text.length > max) {
+      // Cut at the last whitespace in the final 4 KB so the kept head does not end inside a token.
+      const ws = text.slice(Math.max(0, max - 4096), max).search(/\s[^\s]*$/);
+      const cut = ws === -1 ? max : Math.max(0, max - 4096) + ws;
+      const r = redact(text.slice(0, cut), opts);
+      const detectors = [...new Set(r.matches.map((m) => m.detector))].sort();
+      return { text: r.text + withheldTailMarker(text.length - cut), status: "redacted", detectors };
+    }
+    const r = redact(text, opts);
+    const detectors = [...new Set(r.matches.map((m) => m.detector))].sort();
+    if (r.status === "clean") return { text: opts.keepCleanTextVerbatim ? text : r.text, status: "clean", detectors };
+    return { text: r.text, status: "redacted", detectors };
+  } catch (err) {
+    // Only the error class name: a message could quote the input.
+    const name = err instanceof Error ? err.name : typeof err;
+    try {
+      opts.onFailure?.({ error: name });
+    } catch {
+      /* a failing logger must not turn a fail-closed redaction into a leak */
+    }
+    return { text: REDACTION_FAILED_PLACEHOLDER, status: "failed", detectors: [] };
+  }
+}
+
+/** The redactor used when a caller does not supply one: real detectors, fail-closed. */
+export function defaultRedactor(opts: SafeRedactOptions = {}): (text: string) => string {
+  return (text: string) => safeRedact(text, opts).text;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Operator configuration (extra patterns / known secrets), I/O injected so this package stays pure.
+
+export class RedactionConfigError extends Error {
+  override name = "RedactionConfigError";
+}
+
+/** Env var naming a JSON file of extra patterns. */
+export const REDACTION_PATTERNS_FILE_ENV = "KW_REDACTION_PATTERNS_FILE";
+/** Env vars whose VALUES are always redacted (exact + encoded variants) wherever they appear. */
+export const DEFAULT_KNOWN_SECRET_ENV = ["AIAND_API_KEY", "NEO4J_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "KW_API_TOKEN", "ANTHROPIC_API_KEY"] as const;
+
+export interface RedactionConfig {
+  customPatterns: CustomPattern[];
+  /** Extra env var names whose values are known secrets. */
+  knownSecretEnv: string[];
+}
+
+/**
+ * Parse a pattern file:
+ * `{"patterns":[{"name":"acme_token","regex":"acme_[A-Za-z0-9]{32}","flags":"i","group":0}],"known_secret_env":["ACME_TOKEN"]}`
+ * or a bare array of regex strings. Invalid files throw RedactionConfigError (fail loud, never silently unredacted).
+ */
+export function parseRedactionConfig(jsonText: string, source = "redaction config"): RedactionConfig {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonText);
+  } catch {
+    throw new RedactionConfigError(`${source}: not valid JSON`);
+  }
+  const obj = Array.isArray(raw) ? { patterns: raw } : raw;
+  if (typeof obj !== "object" || obj === null) throw new RedactionConfigError(`${source}: expected an object or an array`);
+  const o = obj as { patterns?: unknown; known_secret_env?: unknown };
+  const patterns = o.patterns ?? [];
+  if (!Array.isArray(patterns)) throw new RedactionConfigError(`${source}: "patterns" must be an array`);
+  const customPatterns = patterns.map((p, i): CustomPattern => {
+    const spec = typeof p === "string" ? { regex: p } : (p as { name?: unknown; regex?: unknown; flags?: unknown; group?: unknown });
+    if (typeof spec !== "object" || spec === null || typeof spec.regex !== "string" || spec.regex.length === 0)
+      throw new RedactionConfigError(`${source}: patterns[${i}] needs a non-empty "regex" string`);
+    const flags = typeof spec.flags === "string" ? spec.flags : "";
+    if (!/^[imsu]*$/.test(flags)) throw new RedactionConfigError(`${source}: patterns[${i}] flags may only use i, m, s, u`);
+    let re: RegExp;
+    try {
+      re = new RegExp(spec.regex, flags);
+    } catch {
+      throw new RedactionConfigError(`${source}: patterns[${i}] is not a valid regular expression`);
+    }
+    if (re.test("")) throw new RedactionConfigError(`${source}: patterns[${i}] matches the empty string`);
+    const group = typeof spec.group === "number" && Number.isInteger(spec.group) && spec.group >= 0 ? spec.group : 0;
+    return { name: typeof spec.name === "string" ? spec.name : `pattern_${i}`, re, group };
+  });
+  const env = o.known_secret_env ?? [];
+  if (!Array.isArray(env) || env.some((e) => typeof e !== "string")) throw new RedactionConfigError(`${source}: "known_secret_env" must be an array of strings`);
+  return { customPatterns, knownSecretEnv: env as string[] };
+}
+
+/**
+ * Redaction options for a process: known secrets from DEFAULT_KNOWN_SECRET_ENV (+ the config's known_secret_env) and
+ * the extra patterns from $KW_REDACTION_PATTERNS_FILE. `readFile` is injected (fs.readFileSync(path, "utf8")).
+ */
+export function redactionOptionsFromEnv(env: Record<string, string | undefined>, readFile?: (path: string) => string): RedactOptions {
+  let config: RedactionConfig = { customPatterns: [], knownSecretEnv: [] };
+  const file = env[REDACTION_PATTERNS_FILE_ENV]?.trim();
+  if (file) {
+    if (!readFile) throw new RedactionConfigError(`${REDACTION_PATTERNS_FILE_ENV} is set but no file reader was supplied`);
+    let text: string;
+    try {
+      text = readFile(file);
+    } catch {
+      throw new RedactionConfigError(`${REDACTION_PATTERNS_FILE_ENV}: cannot read ${file}`);
+    }
+    config = parseRedactionConfig(text, file);
+  }
+  const names = [...new Set([...DEFAULT_KNOWN_SECRET_ENV, ...config.knownSecretEnv])];
+  const knownSecrets = names.flatMap((k) => {
+    const v = env[k]?.trim();
+    return v && v.length >= 8 ? [v] : [];
+  });
+  return { knownSecrets, customPatterns: config.customPatterns };
 }

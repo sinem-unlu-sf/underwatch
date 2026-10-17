@@ -30,6 +30,37 @@ import {
   SafeguardVerificationStatus,
   Severity,
 } from "./enums";
+import {
+  AskWitnessBody,
+  AskWitnessResponse,
+  FindingInvestigationsResponse,
+  InvestigationDetailResponse,
+  InvestigationsListQuery,
+  ScopedInvestigationsResponse,
+} from "./askwitness";
+import { FindingGraphResponse } from "./graph";
+import {
+  MechanismsResponse,
+  SafeguardApproveBody,
+  SafeguardDetailResponse,
+  SafeguardMutationResponse,
+  SafeguardPatchQuery,
+  SafeguardProposalBody,
+  SafeguardProposalResponse,
+  SafeguardRejectBody,
+  SafeguardRollbackBody,
+  SafeguardVersionBody,
+} from "./safeguards";
+import { StartSupervisedRunBody, StartSupervisedRunResponse, SupervisedRun } from "./supervised";
+import { StartVerificationBody, VerificationHarnessStatus, VerificationRunResponse } from "./verification";
+import {
+  AuthorizeWorkspaceBody,
+  ClaudeMdQuery,
+  ClaudeMdResponse,
+  DemoWorkspaceResponse,
+  WorkspaceResponse,
+  WorkspacesResponse,
+} from "./workspaces";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Routes. Server registers API_ROUTES (Fastify ":param" syntax); clients build URLs with apiPaths.
@@ -48,6 +79,29 @@ export const API_ROUTES = {
   safeguards: "/api/safeguards",
   evidence: "/api/evidence/:id",
   settingsStatus: "/api/settings/status",
+  // Ask Witness addendum ---------------------------------------------------------------------------------------
+  authCheck: "/api/auth/check",
+  workspaces: "/api/workspaces",
+  workspaceDemo: "/api/workspaces/demo",
+  workspaceClaudeMd: "/api/workspaces/:id/claude-md",
+  findingInvestigations: "/api/findings/:id/investigations",
+  investigation: "/api/investigations/:id",
+  /** Ask Witness run scope: GET lists, POST asks (AskWitnessBody). */
+  runInvestigations: "/api/runs/:id/investigations",
+  /** Ask Witness workspace scope: GET ?scope=workspace lists, POST asks (AskWitnessBody). */
+  investigations: "/api/investigations",
+  findingSafeguardProposals: "/api/findings/:id/safeguards/proposals",
+  findingGraph: "/api/findings/:id/graph",
+  safeguardMechanisms: "/api/safeguard-mechanisms",
+  safeguard: "/api/safeguards/:id",
+  safeguardVersions: "/api/safeguards/:id/versions",
+  safeguardReject: "/api/safeguards/:id/reject",
+  safeguardApprove: "/api/safeguards/:id/approve",
+  safeguardRollback: "/api/safeguards/:id/rollback",
+  safeguardPatch: "/api/safeguards/:id/patch",
+  safeguardVerificationRuns: "/api/safeguards/:id/verification-runs",
+  verificationRun: "/api/verification-runs/:id",
+  verificationHarness: "/api/verification/harness",
 } as const;
 export type ApiRouteKey = keyof typeof API_ROUTES;
 
@@ -65,13 +119,46 @@ export const apiPaths = {
   safeguards: () => API_ROUTES.safeguards,
   evidence: (id: string) => `/api/evidence/${enc(id)}`,
   settingsStatus: () => API_ROUTES.settingsStatus,
+  authCheck: () => API_ROUTES.authCheck,
+  workspaces: () => API_ROUTES.workspaces,
+  workspaceDemo: () => API_ROUTES.workspaceDemo,
+  workspaceClaudeMd: (id: string) => `/api/workspaces/${enc(id)}/claude-md`,
+  findingInvestigations: (id: string) => `/api/findings/${enc(id)}/investigations`,
+  investigation: (id: string) => `/api/investigations/${enc(id)}`,
+  runInvestigations: (id: string) => `/api/runs/${enc(id)}/investigations`,
+  investigations: () => API_ROUTES.investigations,
+  findingSafeguardProposals: (id: string) => `/api/findings/${enc(id)}/safeguards/proposals`,
+  findingGraph: (id: string) => `/api/findings/${enc(id)}/graph`,
+  safeguardMechanisms: () => API_ROUTES.safeguardMechanisms,
+  safeguard: (id: string) => `/api/safeguards/${enc(id)}`,
+  safeguardVersions: (id: string) => `/api/safeguards/${enc(id)}/versions`,
+  safeguardReject: (id: string) => `/api/safeguards/${enc(id)}/reject`,
+  safeguardApprove: (id: string) => `/api/safeguards/${enc(id)}/approve`,
+  safeguardRollback: (id: string) => `/api/safeguards/${enc(id)}/rollback`,
+  safeguardPatch: (id: string) => `/api/safeguards/${enc(id)}/patch`,
+  safeguardVerificationRuns: (id: string) => `/api/safeguards/${enc(id)}/verification-runs`,
+  verificationRun: (id: string) => `/api/verification-runs/${enc(id)}`,
+  verificationHarness: () => API_ROUTES.verificationHarness,
 } as const satisfies Record<ApiRouteKey, (...args: string[]) => string>;
+
+/**
+ * Every request from the web app carries this header (value KW_CLIENT_HEADER_VALUE). Mutating routes reject requests
+ * without it (403 forbidden): a custom header forces a CORS preflight, so other origins cannot fire simple
+ * cross-site POSTs at the local API.
+ */
+export const KW_CLIENT_HEADER = "x-kw-client";
+export const KW_CLIENT_HEADER_VALUE = "kw-web";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Shared pieces
 // ---------------------------------------------------------------------------------------------------------------
 
-/** Every non-2xx response body. HTTP status: 400 validation_error, 404 not_found, 409 invalid_transition, 422 note_required, 500 internal_error, 501 not_implemented. */
+/**
+ * Every non-2xx response body. HTTP status: 400 validation_error, 401 unauthorized, 403 forbidden,
+ * 403 workspace_not_authorized, 404 not_found, 409 invalid_transition, 409 conflict (idempotency key reused with a
+ * different request, or a concurrent state change), 409 file_conflict (details: FileConflictDetails), 422 note_required,
+ * 500 internal_error, 501 not_implemented, 503 ai_unavailable, 504 timeout.
+ */
 export const ApiErrorCode = z.enum([
   "validation_error",
   "not_found",
@@ -79,6 +166,13 @@ export const ApiErrorCode = z.enum([
   "note_required",
   "internal_error",
   "not_implemented",
+  "unauthorized",
+  "forbidden",
+  "workspace_not_authorized",
+  "conflict",
+  "file_conflict",
+  "ai_unavailable",
+  "timeout",
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
 
@@ -172,13 +266,16 @@ export type VerificationRunListItem = z.infer<typeof VerificationRunListItem>;
 export const HealthResponse = z.object({
   status: z.enum(["ok", "degraded"]),
   service: z.literal("kernel-witness-api"),
-  version: z.string(),
+  /** Only with a valid bearer token: unauthenticated callers get a minimal liveness body (status, service, time). */
+  version: z.string().optional(),
   time: Timestamp,
-  database: z.object({
-    ok: z.boolean(),
-    driver: z.literal("node:sqlite"),
-    detail: z.string(),
-  }),
+  database: z
+    .object({
+      ok: z.boolean(),
+      driver: z.literal("node:sqlite"),
+      detail: z.string(),
+    })
+    .optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
@@ -257,6 +354,8 @@ export const RunDetailResponse = z.object({
     findings_by_status: z.record(FindingStatus, count),
     open_findings: count,
   }),
+  /** Live supervised-run record (POST /api/runs); null/absent for fixture runs and runs ingested another way. */
+  supervised: SupervisedRun.nullable().optional(),
 });
 export type RunDetailResponse = z.infer<typeof RunDetailResponse>;
 
@@ -403,6 +502,22 @@ export const SettingsStatusResponse = z.object({
 export type SettingsStatusResponse = z.infer<typeof SettingsStatusResponse>;
 
 // ---------------------------------------------------------------------------------------------------------------
+// GET /api/auth/check
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * local_loopback: the API listens on 127.0.0.1 only and accepts the web app (allowed Origin + KW_CLIENT_HEADER).
+ * token: KW_API_TOKEN is set and requests must send `Authorization: Bearer <token>` (never returned by the API).
+ */
+export const AuthCheckResponse = z.object({
+  authenticated: z.boolean(),
+  actor: z.string(),
+  mode: z.enum(["local_loopback", "token"]),
+  detail: z.string(),
+});
+export type AuthCheckResponse = z.infer<typeof AuthCheckResponse>;
+
+// ---------------------------------------------------------------------------------------------------------------
 // Machine-readable contract: one entry per endpoint.
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -413,6 +528,10 @@ interface EndpointContract {
   query?: z.ZodType;
   body?: z.ZodType;
   response: z.ZodType;
+  /** Success status when not 200. */
+  status?: 201 | 202;
+  /** Response content type when not application/json. */
+  contentType?: "text/plain";
 }
 
 export const API_CONTRACT = {
@@ -434,4 +553,55 @@ export const API_CONTRACT = {
   safeguards: { method: "GET", path: API_ROUTES.safeguards, query: SafeguardsQuery, response: SafeguardsResponse },
   evidence: { method: "GET", path: API_ROUTES.evidence, params: IdParams, response: EvidenceResponse },
   settingsStatus: { method: "GET", path: API_ROUTES.settingsStatus, response: SettingsStatusResponse },
+  // Ask Witness addendum ---------------------------------------------------------------------------------------
+  authCheck: { method: "GET", path: API_ROUTES.authCheck, response: AuthCheckResponse },
+  /** GET lists; POST {path,label,confirm:true} authorizes a directory (contract key workspacesCreate below). */
+  workspaces: { method: "GET", path: API_ROUTES.workspaces, response: WorkspacesResponse },
+  workspaceDemo: { method: "POST", path: API_ROUTES.workspaceDemo, response: DemoWorkspaceResponse },
+  workspaceClaudeMd: { method: "GET", path: API_ROUTES.workspaceClaudeMd, params: IdParams, query: ClaudeMdQuery, response: ClaudeMdResponse },
+  findingInvestigations: { method: "GET", path: API_ROUTES.findingInvestigations, params: IdParams, response: FindingInvestigationsResponse },
+  investigation: { method: "GET", path: API_ROUTES.investigation, params: IdParams, response: InvestigationDetailResponse },
+  runInvestigations: { method: "GET", path: API_ROUTES.runInvestigations, params: IdParams, response: ScopedInvestigationsResponse },
+  investigations: { method: "GET", path: API_ROUTES.investigations, query: InvestigationsListQuery, response: ScopedInvestigationsResponse },
+  findingSafeguardProposals: {
+    method: "POST",
+    path: API_ROUTES.findingSafeguardProposals,
+    params: IdParams,
+    body: SafeguardProposalBody,
+    response: SafeguardProposalResponse,
+  },
+  findingGraph: { method: "GET", path: API_ROUTES.findingGraph, params: IdParams, response: FindingGraphResponse },
+  safeguardMechanisms: { method: "GET", path: API_ROUTES.safeguardMechanisms, response: MechanismsResponse },
+  safeguard: { method: "GET", path: API_ROUTES.safeguard, params: IdParams, response: SafeguardDetailResponse },
+  safeguardVersions: { method: "POST", path: API_ROUTES.safeguardVersions, params: IdParams, body: SafeguardVersionBody, response: SafeguardDetailResponse },
+  safeguardReject: { method: "POST", path: API_ROUTES.safeguardReject, params: IdParams, body: SafeguardRejectBody, response: SafeguardDetailResponse },
+  safeguardApprove: { method: "POST", path: API_ROUTES.safeguardApprove, params: IdParams, body: SafeguardApproveBody, response: SafeguardMutationResponse },
+  safeguardRollback: { method: "POST", path: API_ROUTES.safeguardRollback, params: IdParams, body: SafeguardRollbackBody, response: SafeguardMutationResponse },
+  safeguardPatch: { method: "GET", path: API_ROUTES.safeguardPatch, params: IdParams, query: SafeguardPatchQuery, response: z.string(), contentType: "text/plain" },
+  safeguardVerificationRuns: {
+    method: "POST",
+    path: API_ROUTES.safeguardVerificationRuns,
+    params: IdParams,
+    body: StartVerificationBody,
+    response: VerificationRunResponse,
+    status: 202,
+  },
+  verificationRun: { method: "GET", path: API_ROUTES.verificationRun, params: IdParams, response: VerificationRunResponse },
+  verificationHarness: { method: "GET", path: API_ROUTES.verificationHarness, response: VerificationHarnessStatus },
 } as const satisfies Record<ApiRouteKey, EndpointContract>;
+
+/** Same paths, second method. Kept separate so API_CONTRACT stays one entry per route key. */
+export const API_CONTRACT_EXTRA = {
+  workspacesCreate: { method: "POST", path: API_ROUTES.workspaces, body: AuthorizeWorkspaceBody, response: WorkspaceResponse, status: 201 },
+  /** Starts a live supervised run (async; poll GET /api/runs/:id). Idempotent on client_request_id. */
+  runsStart: { method: "POST", path: API_ROUTES.runs, body: StartSupervisedRunBody, response: StartSupervisedRunResponse, status: 202 },
+  findingInvestigationsAsk: {
+    method: "POST",
+    path: API_ROUTES.findingInvestigations,
+    params: IdParams,
+    body: AskWitnessBody,
+    response: AskWitnessResponse,
+  },
+  runInvestigationsAsk: { method: "POST", path: API_ROUTES.runInvestigations, params: IdParams, body: AskWitnessBody, response: AskWitnessResponse },
+  workspaceInvestigationsAsk: { method: "POST", path: API_ROUTES.investigations, body: AskWitnessBody, response: AskWitnessResponse },
+} as const satisfies Record<string, EndpointContract>;

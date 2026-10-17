@@ -149,7 +149,12 @@ export const safeguards = new TableCodec<Safeguard>("safeguards", ["id"], {
   last_verification_run_id: "text",
 });
 
-export const verificationRuns = new TableCodec<VerificationRun>("verification_runs", ["id"], {
+/**
+ * v1 columns only. The issue-4 outcome columns (migration 080) are owned by verification/repo.ts; bundle rows written
+ * here leave them NULL, and readers derive outcomes with outcomesForRun() (never a task success from legacy columns).
+ */
+export type VerificationRunV1Columns = Omit<VerificationRun, "security_outcome" | "task_outcome" | "reported_task_claim">;
+export const verificationRuns = new TableCodec<VerificationRunV1Columns>("verification_runs", ["id"], {
   id: "text",
   safeguard_id: "text",
   finding_id: "text",

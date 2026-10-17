@@ -12,14 +12,16 @@ import { stmt } from "../db/codec";
 import type { Db } from "../db/connection";
 import * as t from "../db/tables";
 import { countOf, fixtureCondition, whereClause } from "./sql";
+import { recordedOutcomesFromRow } from "../verification/repo";
 
 const SAFEGUARD_LIST_SELECT = `SELECT ${t.safeguards.columns("sg")}, f.title AS finding_title, f.status AS finding_status, f.run_id AS run_id
   FROM safeguards sg JOIN findings f ON f.id = sg.finding_id`;
 
 function getVerificationRun(db: Db, id: string | null): VerificationRun | null {
   if (id === null) return null;
-  const row = stmt(db, `SELECT ${t.verificationRuns.selectColumns} FROM verification_runs WHERE id = ?`).get(id);
-  return row ? t.verificationRuns.fromRow(row) : null;
+  const row = stmt(db, `SELECT ${t.verificationRuns.selectColumns}, security_outcome, task_outcome, reported_task_claim FROM verification_runs WHERE id = ?`).get(id);
+  // Issue 4: include harness-recorded outcomes when present (historical rows have none; the UI derives them as legacy).
+  return row ? { ...t.verificationRuns.fromRow(row), ...recordedOutcomesFromRow(row) } : null;
 }
 
 function toListItem(db: Db, row: Record<string, unknown>): SafeguardListItem {
@@ -70,11 +72,11 @@ export function recentCompletedVerifications(db: Db, limit: number): { items: Ve
   const total = countOf(stmt(db, "SELECT COUNT(*) AS n FROM verification_runs WHERE status = 'completed'").get());
   const rows = stmt(
     db,
-    `SELECT ${t.verificationRuns.columns("v")}, sg.title AS safeguard_title
+    `SELECT ${t.verificationRuns.columns("v")}, v.security_outcome, v.task_outcome, v.reported_task_claim, sg.title AS safeguard_title
      FROM verification_runs v JOIN safeguards sg ON sg.id = v.safeguard_id
      WHERE v.status = 'completed'
      ORDER BY v.ended_at IS NULL, julianday(v.ended_at) DESC, v.id
      LIMIT ?`,
   ).all(limit);
-  return { items: rows.map((r) => ({ ...t.verificationRuns.fromRow(r), safeguard_title: r.safeguard_title as string })), total };
+  return { items: rows.map((r) => ({ ...t.verificationRuns.fromRow(r), ...recordedOutcomesFromRow(r), safeguard_title: r.safeguard_title as string })), total };
 }

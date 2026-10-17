@@ -52,7 +52,7 @@ describe("api query parsing", () => {
     expect(() => RunsQuery.parse({ has_findings: "yes" })).toThrow();
   });
   it("has a contract entry per route", () => {
-    expect(Object.keys(API_CONTRACT)).toHaveLength(12);
+    expect(Object.keys(API_CONTRACT)).toHaveLength(32); // +runInvestigations, +investigations (Ask Witness scopes)
   });
 });
 

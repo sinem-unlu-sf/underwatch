@@ -14,7 +14,9 @@ import {
   type FindingStatusUpdateResponse,
   type RunFindingsResponse,
 } from "@kw/schema";
+import { safeRedact } from "@kw/redaction";
 import { stmt } from "../db/codec";
+import { processRedactionOptions } from "../ingest/sanitize";
 import { transaction, type Db } from "../db/connection";
 import * as t from "../db/tables";
 import { ApiHttpError, notFound } from "../errors";
@@ -128,7 +130,7 @@ export function getFindingDetail(db: Db, id: string): FindingDetailResponse {
     allowed_transitions: [...allowedFindingTransitions(finding.status)],
     ai_explanation: {
       status: "not_implemented",
-      detail: "AI-assisted explanations (ai& Inference) are not implemented yet - pending architecture review. No explanation text is generated.",
+      detail: "No automatic AI explanation is generated. Use Ask Witness on this finding for advisory, citation-checked answers (ai& Inference, optional).",
     },
   };
 }
@@ -155,7 +157,8 @@ export function updateFindingStatus(db: Db, id: string, body: FindingStatusUpdat
       to: body.to,
       actor_type: "user",
       actor,
-      note,
+      // User-typed note: redacted fail-closed before storage (ISSUE 3), like every other free-text field.
+      note: note === null ? null : safeRedact(note, { ...processRedactionOptions(), keepCleanTextVerbatim: true }).text,
       at,
     };
     if (!t.statusHistory.insertOrIgnore(db, change)) throw new Error(`Duplicate status change id ${change.id}`);

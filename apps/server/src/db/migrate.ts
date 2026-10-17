@@ -20,8 +20,11 @@ export function loadMigrations(dir: string = MIGRATIONS_DIR): Migration[] {
       return { version: Number(m[1]), name: m[2]!, sql: readFileSync(path.join(dir, file), "utf8") };
     })
     .sort((a, b) => a.version - b.version);
+  // Gaps are allowed (parallel features claim distinct number ranges, e.g. 090_findings_snapshots); duplicates are not.
   migrations.forEach((m, i) => {
-    if (m.version !== i + 1) throw new Error(`Migrations must be numbered consecutively from 001; found ${m.version} at position ${i + 1}`);
+    if (m.version < 1) throw new Error(`Migration versions start at 001; found ${m.version}`);
+    const prev = migrations[i - 1];
+    if (prev && prev.version === m.version) throw new Error(`Duplicate migration version ${m.version}: ${prev.name} and ${m.name}`);
   });
   return migrations;
 }

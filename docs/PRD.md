@@ -9,6 +9,7 @@
 
 **Addenda:**
 - **A: Ask Witness + Safeguard Generation** ([`PRD-addendum-ask-witness.md`](./PRD-addendum-ask-witness.md), added 2026-10-17). It extends FR-7 (ai& explanations), FR-9 (safeguard generation) and FR-10 (verification runs) with an interactive investigator for each finding, `CLAUDE.md` / permission-rule / hook / regression-test safeguards applied to an authorized local workspace, and controlled verification. Where the addendum is more specific than this document, the addendum governs.
+- **B: User-Controlled Findings Update Modes** ([`PRD-addendum-findings-modes.md`](./PRD-addendum-findings-modes.md), added 2026-10-17). The Findings view gets three presentation and refresh modes: Daily Digest, By Task (the default) and Current State, the last refreshing only when the user asks. Collection, finding generation and enforcement are explicitly decoupled from presentation. It refines §6.3 to §6.6: no auto-populating content, and the user decides when the view changes.
 
 ---
 

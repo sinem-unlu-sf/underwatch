@@ -8,3 +8,6 @@ data/*
 !.env.example
 .DS_Store
 coverage/
+!fixtures/demo-repo-template/.env
+data/workspaces/
+data/evidence/

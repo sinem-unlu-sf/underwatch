@@ -1,3 +1,5 @@
+import type { AskWitnessModelOutput } from "@kw/schema";
+import type { AskWitnessHistoryEntry } from "./askwitness";
 import type { EvidenceBundle } from "./bundle";
 import type { CheckedExplanation, CheckedSafeguardProposal } from "./citations";
 import type { PromptTemplate } from "./prompts";
@@ -39,7 +41,9 @@ export type UnavailableReason =
   | "model_not_found"
   | "forbidden"
   | "redaction_guard_tripped"
-  | "provider_error";
+  | "provider_error"
+  /** The configured ai& endpoint failed the HTTPS/host policy (or TLS verification is disabled); nothing was sent. */
+  | "endpoint_rejected";
 
 export type InferenceResult<T> =
   | { status: "ok"; value: T; meta: InferenceMeta }
@@ -70,6 +74,11 @@ export interface InferenceProvider {
   explainFinding(bundle: EvidenceBundle, opts?: CallOptions): Promise<InferenceResult<CheckedExplanation>>;
   proposeSafeguard(bundle: EvidenceBundle, opts?: CallOptions): Promise<InferenceResult<CheckedSafeguardProposal>>;
   health(opts?: CallOptions): Promise<InferenceResult<HealthInfo>>;
+  /**
+   * Ask Witness: one question about one finding's bundle, with truncated prior turns of the same investigation.
+   * Returns shape-validated model output only; the caller assigns evidence labels (checkAskWitnessOutput).
+   */
+  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>>;
   /** Generic structured call for app-defined prompt templates (see AiAndProvider.runTemplate). */
   runTemplate<T>(tpl: PromptTemplate, bundle: EvidenceBundle, validate: TemplateValidator<T>, opts?: TemplateCallOptions): Promise<InferenceResult<T>>;
 }

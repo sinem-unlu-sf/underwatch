@@ -13,6 +13,7 @@
   "dependencies": {
     "@kw/schema": "workspace:*",
     "@tanstack/react-query": "^5.104.3",
+    "cytoscape": "3.34.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^7.18.4"

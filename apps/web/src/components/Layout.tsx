@@ -1,8 +1,9 @@
 import type { DataMode } from "@kw/schema";
 import { NavLink, Outlet } from "react-router";
-import { useSettingsStatus } from "../api/queries";
-import { ApiRequestError } from "../api/client";
-import { Cmd } from "./states";
+import { useAuthCheck, useSettingsStatus } from "../api/queries";
+import { ApiRequestError, isPermissionDenied } from "../api/client";
+import { Cmd, PermissionDenied } from "./states";
+import { AskWitnessDrawerProvider, AskWitnessLauncher } from "./askwitness/AskWitnessDrawer";
 
 const NAV = [
   { to: "/", label: "Overview", end: true },
@@ -13,6 +14,14 @@ const NAV = [
 ] as const;
 
 export function Layout() {
+  return (
+    <AskWitnessDrawerProvider>
+      <LayoutShell />
+    </AskWitnessDrawerProvider>
+  );
+}
+
+function LayoutShell() {
   return (
     <div className="flex h-full min-h-0">
       <aside className="flex w-[196px] shrink-0 flex-col border-r border-line bg-surface-1">
@@ -39,18 +48,25 @@ export function Layout() {
         <div className="mt-auto border-t border-line px-4 py-3 text-[11px] text-fg-2">
           API <span className="font-mono">127.0.0.1:4600</span>
           <br />
-          Phase 1 foundation
+          local only
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
         <main className="min-h-0 flex-1 overflow-auto px-5 py-4">
-          <Outlet />
+          <AuthGate />
         </main>
       </div>
     </div>
   );
+}
+
+/** 401/403 on the auth probe replaces every page with the permission-denied state (with a token field). */
+function AuthGate() {
+  const auth = useAuthCheck();
+  if (auth.error && isPermissionDenied(auth.error)) return <PermissionDenied message={auth.error.message} />;
+  return <Outlet />;
 }
 
 function TopBar() {
@@ -60,11 +76,12 @@ function TopBar() {
       <div className="flex flex-wrap items-center gap-2 px-5 py-2">
         <span
           className="hatch inline-flex items-center rounded-[3px] px-2 py-0.5 text-[11px] text-unknown"
-          title="Only the foundation is built: schema, API, persistence and UI. Live capture and integrations are not implemented."
+          title="Local build. Integration status (ai&, verification harness, observers, Neo4j) is reported on the Settings page; unavailable parts are shown as unavailable, never simulated."
         >
-          Foundation build: adapter / observers / ai& / Neo4j pending architecture review
+          Local build: AI is advisory and optional; see Settings for what is connected
         </span>
         <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <AskWitnessLauncher />
           <ApiIndicator ok={settings.isSuccess} pending={settings.isPending} error={settings.error} />
         </div>
       </div>

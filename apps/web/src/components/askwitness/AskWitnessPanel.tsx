@@ -1,0 +1,240 @@
+import { ASK_WITNESS_SUGGESTED_QUESTIONS, type BundleEvidenceRef, type Severity } from "@kw/schema";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { ApiRequestError, api, newClientRequestId } from "../../api/client";
+import { queryKeys, useFindingInvestigations, useInvestigation } from "../../api/queries";
+import { FixtureBadge, SeverityBadge } from "../badges";
+import { ErrorState, MutationError, SkeletonBlock } from "../states";
+import { Panel } from "../ui";
+import { TurnView, type EvidenceLookup } from "./AnswerView";
+import { EvidenceRefDrawer } from "./EvidenceRef";
+
+export interface AskWitnessFinding {
+  id: string;
+  title: string;
+  severity: Severity;
+  is_fixture: boolean;
+}
+
+interface Pending {
+  question: string;
+  clientRequestId: string;
+  investigationId: string | null;
+}
+
+/**
+ * Ask Witness (addendum Feature A). The finding context is implicit: the server retrieves the evidence bundle for this
+ * finding only. Every question carries a client_request_id; a network-level retry reuses it, so the server returns the
+ * stored turn instead of recording a duplicate.
+ */
+export function AskWitnessPanel({ finding, onCreateSafeguard }: { finding: AskWitnessFinding; onCreateSafeguard: (investigationId: string | null) => void }) {
+  const qc = useQueryClient();
+  const list = useFindingInvestigations(finding.id);
+  const [selected, setSelected] = useState<string | null | "new">(null);
+  const latest = useMemo(() => {
+    const items = list.data?.items ?? [];
+    return items.length === 0 ? null : [...items].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]!.id;
+  }, [list.data]);
+  const investigationId = selected === "new" ? null : (selected ?? latest);
+  const detail = useInvestigation(investigationId);
+
+  const [input, setInput] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [extraIndex, setExtraIndex] = useState<BundleEvidenceRef[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const ask = useMutation({
+    mutationFn: (p: Pending) =>
+      api.askWitness(finding.id, { question: p.question, client_request_id: p.clientRequestId, ...(p.investigationId ? { investigation_id: p.investigationId } : {}) }),
+    onSuccess: async (res) => {
+      setExtraIndex(res.evidence_index);
+      setSelected(res.investigation.id);
+      setPending(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.investigation(res.investigation.id) }),
+        qc.invalidateQueries({ queryKey: queryKeys.findingInvestigations(finding.id) }),
+      ]);
+    },
+  });
+
+  const submit = (question: string) => {
+    const q = question.trim();
+    if (!q || ask.isPending) return;
+    const p: Pending = { question: q, clientRequestId: newClientRequestId(), investigationId };
+    setPending(p);
+    setInput("");
+    ask.mutate(p);
+  };
+
+  /** Same request again: reuse the key unless the server said the key conflicts. */
+  const retryPending = () => {
+    if (!pending) return;
+    const conflict = ask.error instanceof ApiRequestError && ask.error.code === "conflict";
+    const p = conflict ? { ...pending, clientRequestId: newClientRequestId() } : pending;
+    setPending(p);
+    ask.mutate(p);
+  };
+
+  const onFormSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    submit(input);
+  };
+
+  const turns = detail.data?.turns ?? [];
+  const index = useMemo(() => {
+    const m = new Map<string, BundleEvidenceRef>();
+    for (const r of detail.data?.evidence_index ?? []) m.set(r.evidence_id, r);
+    for (const r of extraIndex) if (!m.has(r.evidence_id)) m.set(r.evidence_id, r);
+    return m;
+  }, [detail.data, extraIndex]);
+  const ev: EvidenceLookup = { index, onOpen: setOpenId };
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [turns.length, pending]);
+
+  const ai = detail.data?.ai;
+  const items = list.data?.items ?? [];
+
+  return (
+    <Panel
+      id="ask-witness"
+      title="Ask Witness"
+      aside={
+        <>
+          <span className="text-[11px]">ai& · advisory</span>
+          <button type="button" className="btn" onClick={() => onCreateSafeguard(investigationId)}>
+            Create safeguard
+          </button>
+        </>
+      }
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="label">Investigating</span>
+        <FixtureBadge isFixture={finding.is_fixture} compact />
+        <span className="font-medium text-fg-0">{finding.title}</span>
+        <SeverityBadge severity={finding.severity} />
+        {items.length > 0 ? (
+          <span className="ml-auto flex items-center gap-1.5">
+            <select
+              aria-label="Investigation"
+              className="field"
+              value={investigationId ?? "new"}
+              onChange={(e) => setSelected(e.target.value === "new" ? "new" : e.target.value)}
+            >
+              {items.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.last_question ? `${it.last_question.slice(0, 40)}${it.last_question.length > 40 ? "…" : ""}` : it.id} ({it.turn_count})
+                </option>
+              ))}
+              <option value="new">New investigation</option>
+            </select>
+          </span>
+        ) : null}
+      </div>
+      <p className="mb-2 text-[11px] text-fg-2">
+        Answers use only this finding's evidence bundle (redacted). Claim labels are assigned by Kernel Witness from the cited records, not by the model.
+      </p>
+
+      {ai && !ai.available ? (
+        <div role="status" className="hatch mb-2 rounded-[3px] px-2 py-1.5 text-[12px] text-unknown">
+          ai& unavailable: {ai.detail} Questions are still recorded, marked unanswered. Everything else on this page works without AI.
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-3">
+        {list.isPending ? (
+          <SkeletonBlock lines={3} />
+        ) : list.isError ? (
+          <ErrorState error={list.error} what="Ask Witness investigations" />
+        ) : investigationId && detail.isPending ? (
+          <SkeletonBlock lines={4} />
+        ) : investigationId && detail.isError ? (
+          <ErrorState error={detail.error} what="this investigation" />
+        ) : turns.length === 0 && !pending ? (
+          <p className="text-[12px] text-fg-2">No questions asked about this finding yet. Pick a suggested question or write your own.</p>
+        ) : null}
+
+        {turns.map((t) => (
+          <TurnView
+            key={t.id}
+            turn={t}
+            ev={ev}
+            onRetry={submit}
+            retrying={ask.isPending}
+            onCreateSafeguard={() => onCreateSafeguard(investigationId)}
+          />
+        ))}
+
+        {pending ? (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <div className="max-w-[85%] rounded-[3px] border border-line-strong bg-surface-3 px-2 py-1.5 text-[12.5px] whitespace-pre-wrap">
+                {pending.question}
+              </div>
+            </div>
+            {ask.isPending ? (
+              <div role="status" aria-live="polite" className="rounded-[3px] border border-line bg-surface-1 p-2 text-[12px] text-fg-1">
+                Retrieving this finding's evidence and asking ai&… <span className="text-fg-2">(can take up to a minute)</span>
+              </div>
+            ) : ask.isError ? (
+              <div className="space-y-1.5">
+                <MutationError error={ask.error} what="Asking Witness" />
+                <div className="flex gap-1.5">
+                  <button type="button" className="btn" onClick={retryPending}>
+                    Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setInput(pending.question);
+                      setPending(null);
+                      ask.reset();
+                    }}
+                  >
+                    Edit question
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div ref={endRef} />
+      </div>
+
+      <div className="mt-3 border-t border-line pt-3">
+        <div className="mb-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggested questions">
+          {ASK_WITNESS_SUGGESTED_QUESTIONS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className="rounded-[3px] border border-line-strong bg-surface-2 px-2 py-0.5 text-[11.5px] text-fg-1 hover:bg-surface-3 disabled:text-fg-disabled"
+              disabled={ask.isPending}
+              onClick={() => submit(q)}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+        <form onSubmit={onFormSubmit} className="flex gap-1.5">
+          <input
+            aria-label="Ask a question about this finding"
+            className="field min-w-0 flex-1"
+            value={input}
+            maxLength={2000}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={investigationId ? "Ask a follow-up about this finding…" : "Ask about this finding…"}
+            disabled={ask.isPending}
+          />
+          <button type="submit" className="btn btn-primary" disabled={!input.trim() || ask.isPending}>
+            {ask.isPending ? "Asking…" : "Ask"}
+          </button>
+        </form>
+      </div>
+
+      {openId ? <EvidenceRefDrawer id={openId} evidenceRef={index.get(openId)} onClose={() => setOpenId(null)} /> : null}
+    </Panel>
+  );
+}

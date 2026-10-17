@@ -1,9 +1,10 @@
-import type { ComponentStatus, EntityTotals, FindingListItem, OverviewResponse, RunListItem } from "@kw/schema";
+import { outcomesForRun, type ComponentStatus, type EntityTotals, type FindingListItem, type OverviewResponse, type RunListItem } from "@kw/schema";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useOverview } from "../api/queries";
 import {
   ApprovalBadge,
+  Badge,
   ConfidenceBadge,
   FindingStatusBadge,
   FixtureBadge,
@@ -117,7 +118,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           more="/safeguards?approval_status=proposed"
         >
           {data.safeguards_awaiting_approval.items.length === 0 ? (
-            <EmptyState title="No proposed safeguards">Safeguard generation is pending architecture review.</EmptyState>
+            <EmptyState title="No proposed safeguards">Safeguards are proposed from a finding's page; none are awaiting approval.</EmptyState>
           ) : (
             <ul className="divide-y divide-line">
               {data.safeguards_awaiting_approval.items.map((s) => (
@@ -143,15 +144,15 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           shown={data.recent_verification_results.items.length}
         >
           {data.recent_verification_results.items.length === 0 ? (
-            <EmptyState title="No completed verification runs">Verification runs are pending architecture review.</EmptyState>
+            <EmptyState title="No completed verification runs">Verification runs start from an approved safeguard's page; none have completed yet.</EmptyState>
           ) : (
             <table className="data">
               <thead>
                 <tr>
                   <th>Safeguard</th>
-                  <th>Result</th>
-                  <th>Prohibited blocked</th>
-                  <th>Legit worked</th>
+                  <th title="Legacy single verification result, kept unchanged. It is not a task outcome.">Result (legacy)</th>
+                  <th title="Did the safeguard let the prohibited action through? (enforcement only)">Security outcome</th>
+                  <th title="Independent completion checks only. A blocked action implies neither task success nor failure; agent claims never count.">Task outcome</th>
                   <th>Ended</th>
                 </tr>
               </thead>
@@ -165,12 +166,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                       </span>
                     </td>
                     <td>{v.result ? <VerificationBadge status={v.result} /> : <TriState value={null} />}</td>
-                    <td>
-                      <TriState value={v.prohibited_behavior_blocked} />
-                    </td>
-                    <td>
-                      <TriState value={v.legitimate_behavior_worked} />
-                    </td>
+                    <OutcomeCells run={v} />
                     <td>
                       <Time iso={v.ended_at} />
                     </td>
@@ -210,8 +206,8 @@ function FirstRunEmptyState() {
         </p>
         <ol className="list-inside list-decimal space-y-1">
           <li>
-            <span className="text-fg-0">Live runs</span> require the Claude Code adapter and at least one independent observer. Both are{" "}
-            <span className="hatch rounded-[2px] px-1 text-unknown">pending architecture review</span> and cannot be started from this build.
+            <span className="text-fg-0">Live runs</span> require the Claude Code adapter and at least one independent observer. Start one from{" "}
+            <span className="text-fg-0">Agent Runs &gt; Start supervised run</span> (Docker harness; sessions run outside Kernel Witness are not observed).
           </li>
           <li>
             <span className="text-fg-0">Fixture runs</span> (hand-authored samples, badged FIXTURE everywhere) can be loaded to explore the UI:{" "}
@@ -327,5 +323,30 @@ export function ComponentTable({ components }: { components: ComponentStatus[] }
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Issue 4: security and task outcomes as two separate cells, each with its basis; never one merged verdict. */
+function OutcomeCells({ run }: { run: Parameters<typeof outcomesForRun>[0] }) {
+  const o = outcomesForRun(run);
+  const s = o.security_outcome;
+  const t = o.task_outcome;
+  const basis = (b: string | null) => (b ? ` (${b})` : "");
+  return (
+    <>
+      <td title={`${s.reason}${s.evidence_ids.length ? ` | evidence: ${s.evidence_ids.join(", ")}` : ""}`}>
+        <Badge tone={s.value === "blocked" ? "verified" : s.value === "allowed" ? "risk" : "unknown"}>
+          {s.value}
+          {basis(s.basis)}
+        </Badge>
+      </td>
+      <td title={`${t.reason}${t.evidence_ids.length ? ` | evidence: ${t.evidence_ids.join(", ")}` : ""}`}>
+        <Badge tone={t.value === "succeeded" ? "verified" : t.value === "failed" ? "risk" : "unknown"}>
+          {t.value}
+          {basis(t.basis)}
+        </Badge>
+        {o.reported_task_claim?.claim === "claimed_success" && t.value !== "succeeded" ? <span className="ml-1 text-[11px] text-reported">agent claimed done (reported)</span> : null}
+      </td>
+    </>
   );
 }

@@ -21,6 +21,9 @@ export const DETECTOR_IDS = [
   "url_credentials",
   "auth_header",
   "env_secret_value",
+  "encoded_secret",
+  "custom_pattern",
+  "split_secret",
   "high_entropy",
 ] as const;
 export type DetectorId = (typeof DETECTOR_IDS)[number];
@@ -55,9 +58,18 @@ export const DEFAULT_SYNTHETIC_REGISTRY: SyntheticSecretRegistry = {
   values: [],
 };
 
+/** Operator-supplied extra pattern (see parseRedactionConfig). `re` must not use the g/y flags. */
+export interface CustomPattern {
+  name: string;
+  re: RegExp;
+  /** Capture group to redact (0 = whole match). */
+  group: number;
+}
+
 export interface DetectorContext {
   registry: SyntheticSecretRegistry;
   knownSecrets: readonly string[];
+  customPatterns: readonly CustomPattern[];
   entropyThreshold: number;
   hexEntropyThreshold: number;
   entropyMinLength: number;
@@ -187,6 +199,14 @@ function looksLikeCode(v: string): boolean {
   return /[()[\]]/.test(v) || /^(os\.|process\.env|env\.|getenv|self\.|this\.|config\.|settings\.)/.test(v);
 }
 
+/** `other_var`, `getToken`, `self.pw`, `api_key2`: code identifiers, not literals. Values with digits mixed in are not. */
+function looksLikeIdentifierValue(v: string): boolean {
+  if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(v)) return false;
+  if (!/[0-9]/.test(v) || v.includes(".")) return true;
+  if (/^[A-Za-z_]+[0-9]{1,3}$/.test(v)) return true;
+  return isWordyCompound(v);
+}
+
 const SECRETISH_KEY =
   /(secret|token|passw(?:or)?d|passwd|pwd|api[_-]?key|apikey|access[_-]?key|private[_-]?key|client[_-]?secret|credential|auth[_-]?key|signing[_-]?key|session[_-]?key|encryption[_-]?key|master[_-]?key)/i;
 
@@ -226,6 +246,247 @@ function isWordyCompound(tok: string): boolean {
   return parts.length >= 2 && parts.every((p) => p.length <= 14 && WORDY_PART.test(p));
 }
 
+
+// Decoding helpers for the encoded_secret detector (no Buffer/atob: this package has no DOM or node types).
+const B64_INDEX: Record<string, number> = Object.fromEntries([...B64].map((c, i) => [c, i]));
+
+function bytesToLatin1(bytes: number[]): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return s;
+}
+
+function decodeBase64(tok: string): number[] | null {
+  const t = tok.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  if (!/^[A-Za-z0-9+/]+$/.test(t) || t.length % 4 === 1) return null;
+  const out: number[] = [];
+  let buf = 0;
+  let bits = 0;
+  for (const c of t) {
+    buf = (buf << 6) | B64_INDEX[c]!;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((buf >> bits) & 0xff);
+    }
+  }
+  return out;
+}
+
+/** Mostly printable ASCII (tabs/newlines allowed): decoded binary noise is not scanned. */
+function looksPrintable(s: string): boolean {
+  if (s.length < 8) return false;
+  let ok = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if ((c >= 0x20 && c < 0x7f) || c === 9 || c === 10 || c === 13) ok++;
+  }
+  return ok / s.length >= 0.95;
+}
+
+export function decodeCandidates(tok: string): string[] {
+  const out: string[] = [];
+  const hex = tok.replace(/^0x/i, "");
+  if (hex.length >= 32 && hex.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(hex)) {
+    const bytes: number[] = [];
+    for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+    const s = bytesToLatin1(bytes);
+    if (looksPrintable(s)) out.push(s);
+  }
+  if (/^[A-Za-z0-9+/_-]+={0,2}$/.test(tok) && tok.length >= 20) {
+    const bytes = decodeBase64(tok);
+    if (bytes) {
+      const s = bytesToLatin1(bytes);
+      if (looksPrintable(s)) out.push(s);
+    }
+  }
+  if (/%[0-9A-Fa-f]{2}/.test(tok)) {
+    try {
+      out.push(decodeURIComponent(tok));
+    } catch {
+      /* malformed escape: not a candidate */
+    }
+  }
+  return out;
+}
+
+/** Runs every non-heuristic detector except encoded_secret itself on a decoded candidate. */
+function decodedContainsSecret(decoded: string, ctx: DetectorContext): boolean {
+  for (const d of DETECTORS) {
+    if (d.confidence === "heuristic" || d.id === "encoded_secret" || d.id === "split_secret") continue;
+    if (d.find(decoded, ctx).length > 0) return true;
+  }
+  return false;
+}
+
+
+/** Absolute/relative filesystem path: starts with / ~/ ./ ../ (after optional ':' or '=' context) and has word segments. */
+function looksLikeFsPath(tok: string, text: string, idx: number): boolean {
+  if (!/^(?:\/|~\/|\.\.?\/)/.test(tok) && !(text[idx - 1] === "~" || text[idx - 1] === ".")) return false;
+  const segs = tok.split("/").filter(Boolean);
+  return segs.length >= 2 && segs.filter((x) => /^[A-Za-z][a-z]+$/.test(x)).length >= 1;
+}
+
+function isHighEntropyToken(tok: string, index: number, text: string, ctx: DetectorContext): boolean {
+  if (tok.length < ctx.entropyMinLength) return false;
+  if (KW_ID.test(tok) || NON_SECRET_ID.test(tok) || UUID.test(tok)) return false;
+  const before = text.slice(Math.max(0, index - 8), index);
+  if (/(sha1|sha256|sha384|sha512|md5)[-:]$/i.test(before) || /^(sha1|sha256|sha384|sha512|md5)-/i.test(tok)) return false; // integrity strings, content digests
+  if (/^[A-Za-z]+[0-9]{1,3}$/.test(tok)) return false; // identifiers like fooBarBaz2 (random tokens rarely put every digit at the end)
+  if (/^[0-9a-fA-F]+$/.test(tok)) {
+    if (tok.length === 40 || tok.length === 64) return false; // git object ids, sha256 digests
+    if (tok.length < 32) return false;
+    return shannonEntropy(tok) >= ctx.hexEntropyThreshold;
+  }
+  // Inside a URL path (scheme://host/... before any '?'): page slugs and commit links, not credentials.
+  if (insideUrlPath(text, index)) return false;
+  // KEY=VALUE pairs and CLI flags are handled by the assignment detector; base64 only has '=' as trailing padding.
+  if (/=[^=]/.test(tok) || tok.startsWith("--")) return false;
+  // Path-like / compound identifiers made of word-ish parts (claude-agent-sdk-win32-x64) are not secret-shaped.
+  if (isWordyCompound(tok)) return false;
+  if (!/[0-9]/.test(tok) || !/[A-Za-z]/.test(tok)) return false;
+  if (/^[A-Za-z]+(?:[_-][A-Za-z0-9]+)+$/.test(tok) && !/[A-Z].*[0-9]|[0-9].*[A-Z]/.test(tok)) return false; // snake/kebab identifiers
+  return shannonEntropy(tok) >= ctx.entropyThreshold;
+}
+
+/** `Cookie: a=b; c=d` / `Set-Cookie: sid=...`: every cookie VALUE of 8+ characters is redacted (names are kept). */
+function cookieValueSpans(text: string): Span[] {
+  const out: Span[] = [];
+  const header = /(?<![A-Za-z0-9-])(?:set-)?cookie["']?\s*:\s*([^\r\n"']*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = header.exec(text)) !== null) {
+    const listStart = m.index + m[0].length - m[1]!.length;
+    const pair = /(?:^|;)\s*([^=;\s]+)=([^;\s]*)/g;
+    let p: RegExpExecArray | null;
+    while ((p = pair.exec(m[1]!)) !== null) {
+      const name = p[1]!;
+      const value = p[2]!;
+      if (/^(path|domain|expires|max-age|samesite|priority)$/i.test(name) || value.length < 8 || isReferenceOrPlaceholder(value)) continue;
+      const vs = listStart + p.index + p[0].length - value.length;
+      out.push({ detector: "auth_header", start: vs, end: vs + value.length, priority: P.structural });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// split_secret: secrets wrapped across lines (fold -w N, base64 -w 76, xxd / hexdump -C ASCII columns, xxd -p hex)
+
+/** Detectors re-run on the line-joined view. Only precise, prefix/format-anchored ones (no key=value or heuristics). */
+const SPLIT_INNER: readonly DetectorId[] = [
+  "synthetic_secret",
+  "known_secret",
+  "jwt",
+  "aws_access_key",
+  "github_token",
+  "gitlab_token",
+  "anthropic_key",
+  "openai_style_key",
+  "slack_token",
+  "encoded_secret",
+  "custom_pattern",
+];
+
+interface LinePiece {
+  /** Range in the original text that contributes to the joined view. */
+  start: number;
+  end: number;
+  /** Hex column of a hexdump line (also redacted when the ASCII column holds part of a secret). */
+  hex?: { start: number; end: number };
+}
+
+/** `00000010: 485f 544f 4b45 4e3d  H_TOKEN=` (xxd) or `00000010  48 5f 54 4f  |H_TO|` (hexdump -C). */
+function parseDumpLine(line: string, base: number): LinePiece | null {
+  const c = /^([0-9a-fA-F]{6,16})((?:\s+[0-9a-fA-F]{2}){1,16})\s+\|(.{1,16})\|\s*$/.exec(line);
+  if (c) {
+    const hexStart = base + c[1]!.length;
+    const asciiStart = base + line.lastIndexOf("|", line.length - 2) + 1;
+    return { start: asciiStart, end: asciiStart + c[3]!.length, hex: { start: hexStart, end: hexStart + c[2]!.length } };
+  }
+  const x = /^[0-9a-fA-F]{6,16}: /.exec(line);
+  if (!x) return null;
+  const rest = line.slice(x[0].length).replace(/\r$/, "");
+  for (let k = Math.min(16, rest.length); k >= 1; k--) {
+    const ascii = rest.slice(rest.length - k);
+    const hexPart = rest.slice(0, rest.length - k);
+    if (!/ $/.test(hexPart)) continue;
+    const hex = hexPart.replace(/ /g, "");
+    // n >= k: a raw control byte (e.g. a newline printed verbatim instead of '.') can shorten the ASCII column.
+    if (hex.length % 2 !== 0 || hex.length < 2 * k || hex.length > 32 || !/^[0-9a-fA-F]+$/.test(hex)) continue;
+    let ok = true;
+    for (let i = 0; i < k && ok; i++) {
+      const b = parseInt(hex.slice(2 * i, 2 * i + 2), 16);
+      if (b >= 0x20 && b < 0x7f && ascii[i] !== String.fromCharCode(b)) ok = false;
+    }
+    if (!ok) continue;
+    const asciiStart = base + x[0].length + hexPart.length;
+    return { start: asciiStart, end: asciiStart + k, hex: { start: base + x[0].length, end: base + x[0].length + hexPart.trimEnd().length } };
+  }
+  return null;
+}
+
+function splitSecretSpans(text: string, ctx: DetectorContext): Span[] {
+  if (!text.includes("\n")) return [];
+  const pieces: LinePiece[] = [];
+  let base = 0;
+  for (const line of text.split("\n")) {
+    const dump = parseDumpLine(line, base);
+    if (dump) pieces.push(dump);
+    else {
+      const lead = /^\s*/.exec(line)![0].length;
+      const trail = /\s*$/.exec(line.slice(lead))![0].length;
+      pieces.push({ start: base + lead, end: base + line.length - trail });
+    }
+    base += line.length + 1;
+  }
+  if (pieces.length < 2) return [];
+  // Joined view + offset maps.
+  const joinedStart: number[] = [];
+  let joined = "";
+  for (const p of pieces) {
+    joinedStart.push(joined.length);
+    joined += text.slice(p.start, p.end);
+  }
+  const lineOf = (j: number) => {
+    let lo = 0;
+    let hi = pieces.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (joinedStart[mid]! <= j) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  const width = (i: number) => pieces[i]!.end - pieces[i]!.start;
+  const out: Span[] = [];
+  for (const d of DETECTORS) {
+    if (!SPLIT_INNER.includes(d.id)) continue;
+    for (const sp of d.find(joined, ctx)) {
+      const li = lineOf(sp.start);
+      const lj = lineOf(sp.end - 1);
+      if (li === lj) continue; // a single-line match is found by the detector itself on the original text
+      // Wrapped output has fixed-width lines: every line but the last has the same width. Two-line matches also need
+      // the line before to share that width (or a hexdump line), so `env` output (one secret per line) is not glued.
+      const w = width(li);
+      if (w < 8) continue;
+      let wrapped = true;
+      for (let k = li; k < lj; k++) if (width(k) !== w) wrapped = false;
+      // The last line may be wider when the match ran on into unrelated text; accept that only with 2+ full lines.
+      if (width(lj) > w && lj - li < 2) wrapped = false;
+      if (wrapped && lj - li === 1 && !pieces[li]!.hex && !(li > 0 && width(li - 1) === w)) wrapped = false;
+      if (!wrapped) continue;
+      for (let k = li; k <= lj; k++) {
+        const p = pieces[k]!;
+        const from = Math.max(sp.start, joinedStart[k]!) - joinedStart[k]!;
+        const to = Math.min(sp.end, joinedStart[k]! + width(k)) - joinedStart[k]!;
+        if (to > from) out.push({ detector: "split_secret", start: p.start + from, end: p.start + to, priority: P.specific });
+        if (p.hex && p.hex.end > p.hex.start) out.push({ detector: "split_secret", start: p.hex.start, end: p.hex.end, priority: P.specific });
+      }
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // detectors
 
@@ -236,6 +497,7 @@ const P = {
   anthropic: 82,
   structural: 70,
   assignment: 60,
+  encoded: 75,
   heuristic: 10,
 } as const;
 
@@ -361,7 +623,7 @@ export const DETECTORS: readonly DetectorDef[] = [
     confidence: "pattern",
     priority: P.structural,
     // scheme://user:password@host -> redact the password only.
-    find: (text) => spansFor("url_credentials", P.structural, text, /\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s/:@'"<>]+:([^@\s/'"<>]+)@/, 1, (v) => !isReferenceOrPlaceholder(v)),
+    find: (text) => spansFor("url_credentials", P.structural, text, /(?<![a-zA-Z0-9+.-])[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s/:@'"<>]+:([^@\s/'"<>]+)@/, 1, (v) => !isReferenceOrPlaceholder(v)),
   },
   {
     id: "auth_header",
@@ -370,6 +632,17 @@ export const DETECTORS: readonly DetectorDef[] = [
     find: (text) => [
       ...spansFor("auth_header", P.structural, text, /\b(?:proxy-)?authorization["']?\s*[:=]\s*["']?(?:bearer|basic|token)\s+([A-Za-z0-9._~+/=-]{8,})/i, 1, (v) => !isReferenceOrPlaceholder(v)),
       ...spansFor("auth_header", P.structural, text, /\bx-(?:api|auth)-key["']?\s*[:=]\s*["']?([A-Za-z0-9._~+/=-]{8,})/i, 1, (v) => !isReferenceOrPlaceholder(v)),
+      // Other well-known credential headers (GitLab PRIVATE-TOKEN, X-Token, X-Auth-Token, X-Vault-Token ...). A known
+      // header context, so low-entropy values are redacted too.
+      ...spansFor(
+        "auth_header",
+        P.structural,
+        text,
+        /(?<![A-Za-z0-9-])(?:private-token|x-(?:access-|auth-|api-|gitlab-|vault-|csrf-|xsrf-)?token|api-key|x-amz-security-token|x-goog-api-key)["']?\s*:\s*["']?([A-Za-z0-9._~+/=-]{6,})/i,
+        1,
+        (v) => !isReferenceOrPlaceholder(v),
+      ),
+      ...cookieValueSpans(text),
       ...spansFor("auth_header", P.structural, text, /(?:^|[\s"'])(?:-u|--user)\s+["']?[^\s:"']+:([^\s"'@]{4,})/, 1, (v) => !isReferenceOrPlaceholder(v) && !/^\d+$/.test(v)),
     ],
   },
@@ -387,14 +660,17 @@ export const DETECTORS: readonly DetectorDef[] = [
         if (!isSecretishKey(key)) continue;
         const { value, offset } = stripQuotes(m[2]!);
         if (isReferenceOrPlaceholder(value) || looksLikeCode(value)) continue;
-        // lower-case keys (code like `token=other_var`) need a literal-looking value
-        if (key !== key.toUpperCase() && /^[A-Za-z_][A-Za-z0-9_.]*$/.test(value) && offset === 0) continue;
+        // lower-case keys (code like `token=other_var`, `password=self.pw`) need a literal-looking value. Only clearly
+        // code-like identifiers are exempt; a random-looking value (digits mixed in, e.g. `access_token=Ab3x9Q...`,
+        // `_authToken=npm_...`) is still a secret.
+        if (key !== key.toUpperCase() && offset === 0 && looksLikeIdentifierValue(value)) continue;
         if (value.length < 4) continue;
         const vs = m.indices![2]![0] + offset;
         out.push({ detector: "env_secret_value", start: vs, end: vs + value.length, priority: P.assignment });
       }
       // 2. quoted literal assigned to a secret-ish key in JSON / YAML / code: "api_key": "....", password = 'xxx'
-      const kvRe = /(["']?)([A-Za-z0-9_.-]*[A-Za-z0-9])\1\s*(?::|=|:=|=>)\s*(["'])([^"'\r\n]{6,}?)\3/gd;
+      // The lookbehind anchors the key at a word start: without it a long identifier run is rescanned from every offset (O(n^2)).
+      const kvRe = /(["']?)(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]*[A-Za-z0-9])\1\s*(?::|=|:=|=>)\s*(["'])([^"'\r\n]{6,}?)\3/gd;
       while ((m = kvRe.exec(text)) !== null) {
         const key = m[2]!;
         if (!isSecretishKey(key)) continue;
@@ -402,6 +678,12 @@ export const DETECTORS: readonly DetectorDef[] = [
         if (isReferenceOrPlaceholder(value) || /\s/.test(value.trim()) && value.length > 60) continue;
         const [vs, ve] = m.indices![4]!;
         out.push({ detector: "env_secret_value", start: vs, end: ve, priority: P.assignment });
+      }
+      // 2b. URL query parameters that carry credentials under short names (?sig=, ?key=, ?code=, X-Amz-Signature=).
+      const qRe = /[?&](?:sig|signature|key|apikey|code|auth|x-amz-signature|x-amz-credential|x-amz-security-token)=([^&#\s"'<>]{8,})/gid;
+      while ((m = qRe.exec(text)) !== null) {
+        const [vs, ve] = m.indices![1]!;
+        if (!isReferenceOrPlaceholder(m[1]!)) out.push({ detector: "env_secret_value", start: vs, end: ve, priority: P.assignment });
       }
       // 3. YAML-ish unquoted: `  password: hunter22` on its own line.
       const yamlRe = /^[ \t-]*([A-Za-z0-9_.-]+):[ \t]+([^\s"'#{[][^\s#;,]{5,})[ \t]*$/gmd;
@@ -417,6 +699,47 @@ export const DETECTORS: readonly DetectorDef[] = [
     },
   },
   {
+    id: "encoded_secret",
+    confidence: "pattern",
+    priority: P.encoded,
+    find(text, ctx) {
+      // base64 / base64url / hex / percent-encoded tokens whose DECODED form contains a secret (one decoding level).
+      const out: Span[] = [];
+      const re = /(?<![A-Za-z0-9+/_%=-])[A-Za-z0-9+/_%=-]{20,}(?![A-Za-z0-9+/_%=-])/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const whole = m[0];
+        // `name=<encoded>`: also try the value after the last non-padding '='.
+        const eq = /^(.*[^=])=(?!=*$)/.exec(whole);
+        const parts = eq ? [{ tok: whole, off: 0 }, { tok: whole.slice(eq[0].length), off: eq[0].length }] : [{ tok: whole, off: 0 }];
+        for (const { tok, off } of parts) {
+          if (tok.length < 20 || KW_ID.test(tok) || NON_SECRET_ID.test(tok) || UUID.test(tok)) continue;
+          if (decodeCandidates(tok).some((decoded) => decodedContainsSecret(decoded, ctx))) {
+            out.push({ detector: "encoded_secret", start: m.index + off, end: m.index + off + tok.length, priority: P.encoded });
+            break;
+          }
+        }
+      }
+      return out;
+    },
+  },
+  {
+    id: "custom_pattern",
+    confidence: "pattern",
+    priority: P.specific,
+    find(text, ctx) {
+      const out: Span[] = [];
+      for (const p of ctx.customPatterns) out.push(...spansFor("custom_pattern", P.specific, text, p.re, p.group, (v) => v.length > 0));
+      return out;
+    },
+  },
+  {
+    id: "split_secret",
+    confidence: "pattern",
+    priority: P.specific,
+    find: (text, ctx) => splitSecretSpans(text, ctx),
+  },
+  {
     id: "high_entropy",
     confidence: "heuristic",
     priority: P.heuristic,
@@ -427,25 +750,17 @@ export const DETECTORS: readonly DetectorDef[] = [
       while ((m = re.exec(text)) !== null) {
         const tok = m[0];
         if (tok.length < ctx.entropyMinLength) continue;
-        if (KW_ID.test(tok) || NON_SECRET_ID.test(tok) || UUID.test(tok)) continue;
-        const before = text.slice(Math.max(0, m.index - 8), m.index);
-        if (/(sha1|sha256|sha384|sha512|md5)[-:]$/i.test(before) || /^(sha1|sha256|sha384|sha512|md5)-/i.test(tok)) continue; // integrity strings, content digests
-        if (/^[A-Za-z]+[0-9]{1,3}$/.test(tok)) continue; // identifiers like fooBarBaz2 (random tokens rarely put every digit at the end)
-        if (/^[0-9a-fA-F]+$/.test(tok)) {
-          if (tok.length === 40 || tok.length === 64) continue; // git object ids, sha256 digests
-          if (tok.length < 32) continue;
-          if (shannonEntropy(tok) >= ctx.hexEntropyThreshold) out.push({ detector: "high_entropy", start: m.index, end: m.index + tok.length, priority: P.heuristic });
+        if (looksLikeFsPath(tok, text, m.index)) {
+          // Judge each path segment on its own: a temp dir with a UUID or hash segment is not a secret, but a secret
+          // used as a path segment still is (and only that segment is redacted, keeping the path's structure).
+          let off = m.index;
+          for (const seg of tok.split("/")) {
+            if (isHighEntropyToken(seg, off, text, ctx)) out.push({ detector: "high_entropy", start: off, end: off + seg.length, priority: P.heuristic });
+            off += seg.length + 1;
+          }
           continue;
         }
-        // Inside a URL path (scheme://host/... before any '?'): page slugs and commit links, not credentials.
-        if (insideUrlPath(text, m.index)) continue;
-        // KEY=VALUE pairs and CLI flags are handled by the assignment detector; base64 only has '=' as trailing padding.
-        if (/=[^=]/.test(tok) || tok.startsWith("--")) continue;
-        // Path-like / compound identifiers made of word-ish parts (claude-agent-sdk-win32-x64) are not secret-shaped.
-        if (isWordyCompound(tok)) continue;
-        if (!/[0-9]/.test(tok) || !/[A-Za-z]/.test(tok)) continue;
-        if (/^[A-Za-z]+(?:[_-][A-Za-z0-9]+)+$/.test(tok) && !/[A-Z].*[0-9]|[0-9].*[A-Z]/.test(tok)) continue; // snake/kebab identifiers
-        if (shannonEntropy(tok) >= ctx.entropyThreshold) out.push({ detector: "high_entropy", start: m.index, end: m.index + tok.length, priority: P.heuristic });
+        if (isHighEntropyToken(tok, m.index, text, ctx)) out.push({ detector: "high_entropy", start: m.index, end: m.index + tok.length, priority: P.heuristic });
       }
       return out;
     },

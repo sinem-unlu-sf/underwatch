@@ -12,17 +12,21 @@
 # directory is NEVER mounted into any container. Disposable inputs (policy copy,
 # fixture, hook forwarder copy) live in $KW_SMOKE_OUT/.work-<name>/ and are deleted.
 #
-# Auth: if $KW_CLAUDE_TOKEN_FILE (default ~/.kernel-witness/claude-oauth-token) is
-# readable, its content is exported as CLAUDE_CODE_OAUTH_TOKEN ONLY in the subshell
-# that starts the agent container. It is never echoed, logged or written elsewhere,
-# and the evidence dir is scanned for it afterwards. Without the file, the agent runs
-# unauthenticated (pipeline check: hooks + stream capture; the model call fails).
+# Auth (credential broker): if $KW_CLAUDE_TOKEN_FILE (default
+# ~/.kernel-witness/claude-oauth-token) is readable, that FILE is bind-mounted read-only
+# into the llm-broker container ONLY (docker/llm-broker). The agent container never
+# receives the real token: it gets ANTHROPIC_BASE_URL=http://kw-llm-broker:8080 and a
+# random per-run placeholder as CLAUDE_CODE_OAUTH_TOKEN, which only this run's broker
+# accepts. The token is never read into this shell, echoed, logged or copied; the
+# evidence dir (incl. `docker inspect` of both containers) is scanned for it afterwards.
+# Without the file (or with KW_BROKER_CANARY=1) the broker holds a SYNTHETIC canary
+# token instead (pipeline check: hooks + stream capture; the model call fails with 401).
 #
 # Env knobs: KW_SMOKE_OUT, KW_CLAUDE_TOKEN_FILE, KW_TASK, KW_MODEL (haiku),
 # KW_MAX_TURNS (3), KW_HOOK_FORWARDER (default: packages/adapter-claude-code/bin/kw-hook.mjs,
 # falling back to docker/agent/kw-hook.placeholder.mjs),
 # KW_EGRESS_ALLOWLIST, KW_POLICY_DROPINS_DIR (extra managed-settings.d/*.json),
-# KW_SKIP_BUILD=1.
+# KW_SKIP_BUILD=1, KW_BROKER_CANARY=1 (force the synthetic canary token in the broker).
 # Requires: bash (3.2 ok), docker with compose v2, node (host, for run.json), shasum, git.
 set -euo pipefail
 umask 077
@@ -52,14 +56,24 @@ export KW_HOOK_VOLUME="kw-hooks-$NAME"
 export KW_POLICY_DIR="$WORK/policy"
 export KW_HOOK_FORWARDER="$WORK/kw-hook.mjs"
 export KW_EGRESS_ALLOWLIST="$WORK/allowlist.ere"
-unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY 2>/dev/null || true
+# Broker inputs. Compose interpolates these for EVERY command (incl. teardown), so they
+# are set up front; the files are created below. KW_BROKER_TOKEN_FILE is switched to
+# the real token file only in authenticated mode.
+export KW_BROKER_CLIENT_TOKEN_FILE="$WORK/broker/client-token"
+export KW_BROKER_TOKEN_FILE="$WORK/broker/canary-token"
+KW_BROKER_CLIENT_TOKEN="sk-ant-oat01-kwbroker-$(od -An -N24 -tx1 /dev/urandom | tr -d " \n")"
+export KW_BROKER_CLIENT_TOKEN
+CANARY_TOKEN="sk-ant-oat01-KWCANARY-smoke-$(od -An -N16 -tx1 /dev/urandom | tr -d " \n")"
+unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL 2>/dev/null || true
 
 COMPOSE=(docker compose -f "$DOCKER_DIR/compose.agent.yml" --profile agent)
+BROKER_CTR="kw-llm-broker"
 RUN_CTR="kw-agent-run-$NAME"
 PRE_CTR="kw-agent-preflight-$NAME"
 CONF_CTR="kw-agent-conformance-$NAME"
 CONF_VOL="kw-ws-conformance-$NAME"
 LOGPID=""
+BLOGPID=""
 CONFPID=""
 
 T0="$(perl -MTime::HiRes=time -e 'printf "%.3f", time')"
@@ -71,6 +85,7 @@ teardown() {
   docker rm -f "$RUN_CTR" "$PRE_CTR" "$CONF_CTR" >/dev/null 2>&1
   "${COMPOSE[@]}" down --remove-orphans --timeout 5 >/dev/null 2>&1
   if [ -n "$LOGPID" ]; then wait "$LOGPID" 2>/dev/null; LOGPID=""; fi
+  if [ -n "$BLOGPID" ]; then wait "$BLOGPID" 2>/dev/null; BLOGPID=""; fi
   docker volume rm "$KW_WS_VOLUME" "$KW_HOOK_VOLUME" "$CONF_VOL" >/dev/null 2>&1
   rm -rf "$WORK"
 }
@@ -92,7 +107,7 @@ chmod 0700 "$EVID"
 
 if [ "${KW_SKIP_BUILD:-0}" != "1" ]; then
   log "building images (cached)"
-  "${COMPOSE[@]}" build --quiet egress-proxy agent >"$EVID/build.log" 2>&1 || { cat "$EVID/build.log" >&2; exit 1; }
+  "${COMPOSE[@]}" build --quiet egress-proxy llm-broker agent >"$EVID/build.log" 2>&1 || { cat "$EVID/build.log" >&2; exit 1; }
 fi
 
 # Policy: base managed settings + optional drop-ins; world-readable, mounted read-only.
@@ -174,44 +189,7 @@ run_conformance </dev/null >>"$EVID/conformance.host.log" 2>&1 &
 CONFPID=$!
 
 
-# ---------------------------------------------------------------- egress proxy
-log "starting egress proxy + networks"
-"${COMPOSE[@]}" up -d --no-build egress-proxy >>"$EVID/compose.log" 2>&1
-docker logs -f --timestamps kw-egress-proxy >"$EVID/egress-proxy.log" 2>&1 &
-LOGPID=$!
-for _ in $(seq 1 40); do
-  grep -q 'listening on fd' "$EVID/egress-proxy.log" 2>/dev/null && break
-  perl -e 'select(undef,undef,undef,0.25)'
-done
-docker network inspect -f 'name={{.Name}} internal={{.Internal}} subnet={{range .IPAM.Config}}{{.Subnet}}{{end}}' \
-  kw-agent-internal kw-egress >"$EVID/networks.txt"
-
-# ---------------------------------------------------------------- preflight
-log "preflight checks"
-PREFLIGHT='set +e
-one() { tr "\n" " " | sed "s/  */ /g; s/ $//"; }
-echo "P1 claude_version: $(claude --version 2>&1 | one)"
-echo "P2 identity: $(id)"
-if (echo "{}" >> /etc/claude-code/managed-settings.json) 2>/dev/null; then echo "P3 policy_write: WRITABLE"; else echo "P3 policy_write: denied"; fi
-if (mkdir /etc/claude-code/managed-settings.d/x) 2>/dev/null; then echo "P4 policy_dropin_write: WRITABLE"; else echo "P4 policy_dropin_write: denied"; fi
-if (echo x >> /opt/kw/kw-hook.mjs) 2>/dev/null; then echo "P5 forwarder_write: WRITABLE"; else echo "P5 forwarder_write: denied"; fi
-echo "P6 mounts:"; awk "\$5 ~ /^\\/(workspace|kw-hooks|etc\\/claude-code|opt\\/kw)/ {print \"   \", \$5, \$6}" /proc/self/mountinfo
-r=$(curl -sS -o /dev/null -w "http=%{http_code} connect=%{http_connect}" --max-time 20 https://api.anthropic.com/ 2>&1); e=$?; echo "P7 allowed_via_proxy[api.anthropic.com:443]: $(echo "$r" | one) exit=$e"
-r=$(curl -sS -o /dev/null -w "http=%{http_code} connect=%{http_connect}" --max-time 20 https://example.com/ 2>&1); e=$?; echo "P8 denied_via_proxy[example.com:443]: $(echo "$r" | one) exit=$e"
-r=$(curl -sS -o /dev/null -w "connect=%{http_connect}" --max-time 10 -p -x "$HTTPS_PROXY" telnet://api.anthropic.com:22 2>&1); e=$?; echo "P9 denied_port_via_proxy[api.anthropic.com:22]: $(echo "$r" | one) exit=$e"
-r=$(curl --noproxy "*" -sS -o /dev/null -w "http=%{http_code}" --max-time 8 https://api.anthropic.com/ 2>&1); e=$?; echo "P10 direct_no_proxy[api.anthropic.com:443]: $(echo "$r" | one) exit=$e"
-r=$(timeout 8 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>&1); e=$?; echo "P11 direct_tcp[1.1.1.1:443]: $(echo "$r" | one) exit=$e"
-r=$(getent hosts api.anthropic.com 2>&1); e=$?; echo "P12 external_dns[api.anthropic.com]: $(echo "$r" | one) exit=$e"
-'
-"${COMPOSE[@]}" run --rm -T --no-deps --name "$PRE_CTR" --entrypoint sh agent -c "$PREFLIGHT" \
-  </dev/null >"$EVID/preflight.txt" 2>>"$EVID/compose.log" || true
-cat "$EVID/preflight.txt" >&2
-
-wait "$CONFPID" || true
-CONFPID=""
-cat "$EVID/conformance.txt" >&2 2>/dev/null || log "conformance.txt missing (see conformance.host.log)"
-
-# ---------------------------------------------------------------- agent run
+# ---------------------------------------------------------------- credential broker inputs
 if [ -r "$TOKEN_FILE" ] && [ -s "$TOKEN_FILE" ] \
    && tr -d '\r\n' <"$TOKEN_FILE" | LC_ALL=C grep -q '[^A-Za-z0-9._-]'; then
   # A bearer token has no whitespace or shell metacharacters. Do not send a malformed
@@ -227,18 +205,74 @@ else
   MODE="unauthenticated-pipeline-check"
   log "no token file at $TOKEN_FILE: authenticated run pending user setup-token"
 fi
+mkdir -p "$WORK/broker"
+printf '%s' "$KW_BROKER_CLIENT_TOKEN" >"$KW_BROKER_CLIENT_TOKEN_FILE"
+printf '%s' "$CANARY_TOKEN" >"$WORK/broker/canary-token"
+chmod 0600 "$KW_BROKER_CLIENT_TOKEN_FILE" "$WORK/broker/canary-token"
+if [ "$MODE" = "authenticated" ] && [ "${KW_BROKER_CANARY:-0}" != "1" ]; then
+  export KW_BROKER_TOKEN_FILE="$TOKEN_FILE"   # bind-mounted read-only into the broker only
+else
+  [ "${KW_BROKER_CANARY:-0}" = "1" ] && MODE="broker-canary"
+  log "broker holds a SYNTHETIC canary token (mode=$MODE); the model call will fail with 401"
+fi
+
+# ---------------------------------------------------------------- egress proxy + broker
+log "starting egress proxy + credential broker + networks"
+"${COMPOSE[@]}" up -d --no-build egress-proxy llm-broker >>"$EVID/compose.log" 2>&1
+docker logs -f --timestamps kw-egress-proxy >"$EVID/egress-proxy.log" 2>&1 &
+LOGPID=$!
+docker logs -f "$BROKER_CTR" >"$EVID/llm-broker.log" 2>&1 &
+BLOGPID=$!
+for _ in $(seq 1 40); do
+  grep -q 'listening on fd' "$EVID/egress-proxy.log" 2>/dev/null && grep -q '"event":"listening"' "$EVID/llm-broker.log" 2>/dev/null && break
+  perl -e 'select(undef,undef,undef,0.25)'
+done
+grep -q '"event":"listening"' "$EVID/llm-broker.log" || { log "llm-broker did not start:"; cat "$EVID/llm-broker.log" >&2; exit 1; }
+docker network inspect -f 'name={{.Name}} internal={{.Internal}} subnet={{range .IPAM.Config}}{{.Subnet}}{{end}}' \
+  kw-agent-internal kw-egress >"$EVID/networks.txt"
+
+# ---------------------------------------------------------------- preflight
+log "preflight checks"
+PREFLIGHT='set +e
+one() { tr "\n" " " | sed "s/  */ /g; s/ $//"; }
+echo "P1 claude_version: $(claude --version 2>&1 | one)"
+echo "P2 identity: $(id)"
+if (echo "{}" >> /etc/claude-code/managed-settings.json) 2>/dev/null; then echo "P3 policy_write: WRITABLE"; else echo "P3 policy_write: denied"; fi
+if (mkdir /etc/claude-code/managed-settings.d/x) 2>/dev/null; then echo "P4 policy_dropin_write: WRITABLE"; else echo "P4 policy_dropin_write: denied"; fi
+if (echo x >> /opt/kw/kw-hook.mjs) 2>/dev/null; then echo "P5 forwarder_write: WRITABLE"; else echo "P5 forwarder_write: denied"; fi
+echo "P6 mounts:"; awk "\$5 ~ /^\\/(workspace|kw-hooks|etc\\/claude-code|opt\\/kw)/ {print \"   \", \$5, \$6}" /proc/self/mountinfo
+r=$(curl -sS -o /dev/null -w "http=%{http_code} connect=%{http_connect}" --max-time 20 https://api.anthropic.com/ 2>&1); e=$?; echo "P7 api_direct_via_proxy[api.anthropic.com:443]: $(echo "$r" | one) exit=$e"
+r=$(curl -sS -o /dev/null -w "http=%{http_code} connect=%{http_connect}" --max-time 20 https://example.com/ 2>&1); e=$?; echo "P8 denied_via_proxy[example.com:443]: $(echo "$r" | one) exit=$e"
+r=$(curl -sS -o /dev/null -w "connect=%{http_connect}" --max-time 10 -p -x "$HTTPS_PROXY" telnet://api.anthropic.com:22 2>&1); e=$?; echo "P9 denied_port_via_proxy[api.anthropic.com:22]: $(echo "$r" | one) exit=$e"
+r=$(curl --noproxy "*" -sS -o /dev/null -w "http=%{http_code}" --max-time 8 https://api.anthropic.com/ 2>&1); e=$?; echo "P10 direct_no_proxy[api.anthropic.com:443]: $(echo "$r" | one) exit=$e"
+r=$(timeout 8 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>&1); e=$?; echo "P11 direct_tcp[1.1.1.1:443]: $(echo "$r" | one) exit=$e"
+r=$(getent hosts api.anthropic.com 2>&1); e=$?; echo "P12 external_dns[api.anthropic.com]: $(echo "$r" | one) exit=$e"
+r=$(curl -sS -o /dev/null -w "http=%{http_code}" --max-time 10 -H "Authorization: Bearer $CLAUDE_CODE_OAUTH_TOKEN" "$ANTHROPIC_BASE_URL/v1/models" 2>&1); e=$?; echo "P13 broker_non_allowlisted_path[GET /v1/models]: $(echo "$r" | one) exit=$e"
+r=$(curl -sS -o /dev/null -w "http=%{http_code}" --max-time 10 -X POST -H "Authorization: Bearer sk-ant-oat01-kwbroker-wrong" -H "content-type: application/json" -d "{}" "$ANTHROPIC_BASE_URL/v1/messages" 2>&1); e=$?; echo "P14 broker_bad_run_credential[POST /v1/messages]: $(echo "$r" | one) exit=$e"
+r=$(curl -sS -o /dev/null -w "http=%{http_code} connect=%{http_connect}" --max-time 10 -p -x "$ANTHROPIC_BASE_URL" https://example.com/ 2>&1); e=$?; echo "P15 broker_as_forward_proxy[example.com:443]: $(echo "$r" | one) exit=$e"
+case "${CLAUDE_CODE_OAUTH_TOKEN:-}" in sk-ant-oat01-kwbroker-*) o=placeholder;; "") o=none;; *) o=OTHER;; esac
+k=unset; [ -n "${ANTHROPIC_API_KEY:-}" ] && k=SET; t=unset; [ -n "${ANTHROPIC_AUTH_TOKEN:-}" ] && t=SET
+echo "P16 agent_credential_env: oauth=$o api_key=$k auth_token=$t base_url=${ANTHROPIC_BASE_URL:-unset}"
+'
+"${COMPOSE[@]}" run --rm -T --no-deps --name "$PRE_CTR" --entrypoint sh agent -c "$PREFLIGHT" \
+  </dev/null >"$EVID/preflight.txt" 2>>"$EVID/compose.log" || true
+cat "$EVID/preflight.txt" >&2
+
+wait "$CONFPID" || true
+CONFPID=""
+cat "$EVID/conformance.txt" >&2 2>/dev/null || log "conformance.txt missing (see conformance.host.log)"
+
+# ---------------------------------------------------------------- agent run
 log "agent run (mode=$MODE model=$KW_MODEL max_turns=$KW_MAX_TURNS)"
 printf '%s\n' "$TASK" >"$EVID/task.txt"
 # Phase boundary in the host-captured proxy log: bytes before this offset belong to the
 # preflight probes, bytes after it to the agent run (run.json reports them separately).
 sleep 0.3   # let `docker logs -f` flush the preflight lines
 printf 'agent_run_start_byte=%s\n' "$(wc -c <"$EVID/egress-proxy.log" | tr -d ' ')" >"$EVID/egress-proxy.phases.txt"
+printf 'agent_run_start_byte=%s\n' "$(wc -c <"$EVID/llm-broker.log" | tr -d ' ')" >"$EVID/llm-broker.phases.txt"
 set +e
 (
-  if [ "$MODE" = "authenticated" ]; then
-    CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '\r\n' <"$TOKEN_FILE")"
-    export CLAUDE_CODE_OAUTH_TOKEN
-  fi
+  # No credential is exported here: the agent only gets the broker URL + placeholder (compose).
   export KW_TASK="$TASK"
   exec "${COMPOSE[@]}" run -T --no-deps --name "$RUN_CTR" agent
 ) </dev/null >"$EVID/agent-stdout.stream.jsonl" 2>"$EVID/agent-stderr.log"
@@ -247,6 +281,10 @@ set -e
 log "agent exit=$AGENT_EXIT"
 
 docker diff "$RUN_CTR" >"$EVID/container-diff.txt" 2>&1 || true
+# Host-side `docker inspect` of both containers is kept as evidence and is covered by
+# the token scan below (the real token must appear in neither: env, args, labels).
+docker inspect "$RUN_CTR" >"$EVID/inspect-agent.json" 2>&1 || true
+docker inspect "$BROKER_CTR" >"$EVID/inspect-broker.json" 2>&1 || true
 SESSION_ID="$(grep -m1 -o '"session_id":"[0-9a-f-]*"' "$EVID/agent-stdout.stream.jsonl" | cut -d'"' -f4 || true)"
 if [ -n "$SESSION_ID" ]; then
   docker cp "$RUN_CTR:/home/agent/.claude/projects/-workspace/$SESSION_ID.jsonl" - 2>/dev/null \
@@ -261,11 +299,13 @@ vol_sh "$KW_WS_VOLUME" /workspace ro "$SNAP" </dev/null >"$EVID/workspace-after.
 vol_sh "$KW_WS_VOLUME" /workspace ro 'tar -cf - -C /workspace .' </dev/null >"$EVID/workspace-after.tar"
 diff "$EVID/workspace-before.sha256" "$EVID/workspace-after.sha256" >"$EVID/workspace-diff.txt" 2>&1 || true
 
-docker image inspect -f '{{.Id}}' "$AGENT_IMAGE" kw-egress-proxy:1 >"$EVID/images.txt"
-"${COMPOSE[@]}" stop --timeout 5 egress-proxy >>"$EVID/compose.log" 2>&1 || true
+docker image inspect -f '{{.Id}}' "$AGENT_IMAGE" kw-egress-proxy:1 kw-llm-broker:1 >"$EVID/images.txt"
+"${COMPOSE[@]}" stop --timeout 5 egress-proxy llm-broker >>"$EVID/compose.log" 2>&1 || true
 if [ -n "$LOGPID" ]; then wait "$LOGPID" 2>/dev/null || true; LOGPID=""; fi
+if [ -n "$BLOGPID" ]; then wait "$BLOGPID" 2>/dev/null || true; BLOGPID=""; fi
 
-# Secret hygiene: the OAuth token must not appear anywhere in the evidence.
+# Secret hygiene: neither the real OAuth token nor the broker's canary may appear
+# anywhere in the evidence (stream-json, hooks, transcript, logs, docker inspect, ...).
 TOKEN_SCAN="not-applicable"
 if [ -r "$TOKEN_FILE" ] && [ -s "$TOKEN_FILE" ]; then
   if grep -rlF -f <(tr -d '\r\n' <"$TOKEN_FILE"; printf '\n') "$EVID" >"$WORK/leak.txt" 2>/dev/null; then
@@ -273,6 +313,9 @@ if [ -r "$TOKEN_FILE" ] && [ -s "$TOKEN_FILE" ]; then
   else
     TOKEN_SCAN="clean"
   fi
+fi
+if grep -rlF -e "$CANARY_TOKEN" "$EVID" >"$WORK/canary-leak.txt" 2>/dev/null; then
+  TOKEN_SCAN="LEAK"; log "BROKER CANARY FOUND IN EVIDENCE FILES:"; cat "$WORK/canary-leak.txt" >&2
 fi
 
 node "$REPO/scripts/agent-smoke-summary.mjs" "$EVID" "$MODE" "$AGENT_EXIT" "$TOKEN_SCAN" "$NAME" >"$EVID/run.json"

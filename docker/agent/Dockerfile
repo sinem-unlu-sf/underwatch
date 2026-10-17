@@ -42,7 +42,9 @@ COPY --chmod=0755 entrypoint.sh /usr/local/bin/kw-agent-entrypoint
 # NOT set: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1. Tested 2026-10-17 with 2.1.302 in this
 # image: claude exits at startup with "bubblewrap is required for subprocess env
 # scrubbing and isolation", and bwrap needs user namespaces that Docker's default
-# seccomp + cap_drop ALL deny. So Bash/hook subprocesses CAN read the OAuth token.
+# seccomp + cap_drop ALL deny. So Bash/hook subprocesses can read the whole environment;
+# therefore the REAL Claude token is never put in this container: since 2026-10-17 the
+# agent gets only ANTHROPIC_BASE_URL -> docker/llm-broker and a per-run placeholder.
 ENV DISABLE_AUTOUPDATER=1 \
     DISABLE_UPDATES=1 \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \

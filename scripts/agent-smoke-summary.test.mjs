@@ -13,12 +13,16 @@ P6 mounts:
     /kw-hooks rw,relatime
     /etc/claude-code ro,nosuid,nodev,relatime
     /opt/kw/kw-hook.mjs ro,nosuid,nodev,relatime
-P7 allowed_via_proxy[api.anthropic.com:443]: http=404 connect=200 exit=0
+P7 api_direct_via_proxy[api.anthropic.com:443]: curl: (56) CONNECT tunnel failed, response 403 http=000 connect=403 exit=56
 P8 denied_via_proxy[example.com:443]: curl: (56) CONNECT tunnel failed, response 403 http=000 connect=403 exit=56
 P9 denied_port_via_proxy[api.anthropic.com:22]: curl: (56) CONNECT tunnel failed, response 403 connect=403 exit=56
 P10 direct_no_proxy[api.anthropic.com:443]: curl: (6) Could not resolve host: api.anthropic.com http=000 exit=6
 P11 direct_tcp[1.1.1.1:443]: bash: connect: Network is unreachable exit=1
 P12 external_dns[api.anthropic.com]: exit=2
+P13 broker_non_allowlisted_path[GET /v1/models]: http=403 exit=0
+P14 broker_bad_run_credential[POST /v1/messages]: http=401 exit=0
+P15 broker_as_forward_proxy[example.com:443]: curl: (56) Proxy CONNECT aborted http=000 connect=000 exit=56
+P16 agent_credential_env: oauth=placeholder api_key=unset auth_token=unset base_url=http://kw-llm-broker:8080
 `;
 
 test('all preflight checks pass on a good run', () => {
@@ -96,4 +100,28 @@ test('workspace change: equal / different / missing snapshot', () => {
   const m = workspaceChange('a  ./x\n', '', '');
   assert.equal(m.changed, null);
   assert.match(m.reason, /after/);
+});
+
+import { parseBrokerLog } from './agent-smoke-summary.mjs';
+test('broker checks: direct API route, broker paths, credential env', () => {
+  const bad = PREFLIGHT_OK
+    .replace(/P7 .*\n/, 'P7 api_direct_via_proxy[api.anthropic.com:443]: http=404 connect=200 exit=0\n')
+    .replace('http=403 exit=0\nP14', 'http=200 exit=0\nP14')
+    .replace('http=401 exit=0', 'http=200 exit=0')
+    .replace(/P15 .*\n/, 'P15 broker_as_forward_proxy[example.com:443]: http=200 connect=200 exit=0\n')
+    .replace('oauth=placeholder', 'oauth=OTHER');
+  const c = parsePreflight(bad);
+  for (const k of ['proxy_denies_api_direct', 'broker_denies_non_allowlisted_path', 'broker_denies_bad_run_credential', 'broker_is_not_a_forward_proxy', 'agent_env_has_only_placeholder_credential']) assert.equal(c[k].pass, false, k);
+});
+test('broker log: metadata lines by decision; junk ignored', () => {
+  const log = [
+    '2026-10-17T02:23:42Z {"ts":"x","kw":"llm-broker","event":"listening","port":8080}',
+    '{"ts":"x","kw":"llm-broker","method":"POST","path":"/v1/messages","status":200,"decision":"forwarded"}',
+    '{"ts":"x","kw":"llm-broker","method":"GET","path":"/v1/models","status":403,"decision":"forbidden_path"}',
+    'not json', '{"other":1}',
+  ].join('\n');
+  const b = parseBrokerLog(log);
+  assert.equal(b.listening, true);
+  assert.deepEqual(b.by_decision, { forwarded: 1, forbidden_path: 1 });
+  assert.deepEqual(b.requests, ['POST /v1/messages 200 forwarded', 'GET /v1/models 403 forbidden_path']);
 });

@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useSettingsStatus } from "../api/queries";
 import { IntegrationStatusBadge } from "../components/badges";
 import { ErrorState, PageSkeleton } from "../components/states";
+import { CredentialsPanel, WorkspacesPanel } from "../components/WorkspacesPanel";
 import { KeyValue, Mono, PageHeader, Panel, Time } from "../components/ui";
 import { ComponentTable } from "./OverviewPage";
 
@@ -15,7 +16,7 @@ export function SettingsPage() {
         title="Settings"
         subtitle={
           <>
-            Read-only component status. Secrets are never sent to the browser: “configured via” names an environment variable or file, not its value.
+            Component status and authorized workspaces. Secrets are never sent to the browser: “configured via” names an environment variable or file, not its value.
             {q.data ? (
               <>
                 {" "}
@@ -25,6 +26,10 @@ export function SettingsPage() {
           </>
         }
       />
+      <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <WorkspacesPanel />
+        <CredentialsPanel aiStatus={q.data?.ai_inference.status ?? null} />
+      </div>
       {q.isPending ? <PageSkeleton /> : q.isError ? <ErrorState error={q.error} what="settings status" /> : <SettingsBody s={q.data} />}
     </div>
   );

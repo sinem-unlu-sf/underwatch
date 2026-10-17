@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
-import { ApiRequestError } from "../api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { ApiRequestError, isPermissionDenied } from "../api/client";
+import { getToken, setToken } from "../api/auth";
 
 export function SkeletonRows({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (
@@ -95,6 +97,37 @@ export function ErrorState({ error, what = "data" }: { error: unknown; what?: st
     );
   }
 
+  if (e && isPermissionDenied(e)) return <PermissionDenied message={e.message} />;
+
+  if (e?.kind === "http" && e.code === "workspace_not_authorized") {
+    return (
+      <div role="alert" className="m-3 rounded-[4px] border border-warn/50 bg-warn/10 p-3">
+        <div className="font-semibold text-warn">Workspace not authorized</div>
+        <p className="mt-1 text-fg-1">{e.message}</p>
+        <p className="mt-1 text-[12px] text-fg-2">Authorize the workspace (or create the demo workspace) under Settings → Workspaces. Nothing was written.</p>
+      </div>
+    );
+  }
+
+  if (e?.kind === "http" && e.code === "not_implemented") {
+    return (
+      <div role="status" className="m-3 hatch rounded-[4px] p-3">
+        <div className="font-semibold text-unknown">Not available in this build</div>
+        <p className="mt-1 text-fg-1">The server does not implement {what} yet. Nothing is simulated.</p>
+        <p className="mt-1 font-mono text-[11px] text-fg-2">{e.message}</p>
+      </div>
+    );
+  }
+
+  if (e?.kind === "http" && (e.code === "timeout" || e.status === 504)) {
+    return (
+      <div role="alert" className="m-3 rounded-[4px] border border-warn/50 bg-warn/10 p-3">
+        <div className="font-semibold text-warn">Timed out</div>
+        <p className="mt-1 text-fg-1">Loading {what} took too long. Try again.</p>
+      </div>
+    );
+  }
+
   if (e?.kind === "http" && e.code === "not_found") {
     return (
       <div role="alert" className="m-3 rounded-[4px] border border-line-strong bg-surface-2 p-3">
@@ -110,6 +143,88 @@ export function ErrorState({ error, what = "data" }: { error: unknown; what?: st
       <p className="mt-1 font-mono text-[11px] text-fg-1">
         {e ? `${e.status ?? ""} ${e.code ?? ""} ${e.message}` : error instanceof Error ? error.message : String(error)}
       </p>
+    </div>
+  );
+}
+
+/**
+ * 401/403 from the API. The server is local-only; when it runs in token mode the browser needs the token from the link
+ * the server prints at startup. The pasted token is kept in localStorage ("kw.token") and sent as a Bearer header.
+ */
+export function PermissionDenied({ message }: { message?: string }) {
+  const qc = useQueryClient();
+  const [value, setValue] = useState("");
+  const hadToken = getToken() !== null;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!value.trim()) return;
+    setToken(value);
+    setValue("");
+    void qc.invalidateQueries();
+  };
+  return (
+    <div role="alert" className="m-3 rounded-[4px] border border-warn/50 bg-warn/10 p-3">
+      <div className="font-semibold text-warn">Permission denied</div>
+      <p className="mt-1 text-fg-1">
+        The Kernel Witness API refused this request{hadToken ? " with the stored access token" : " because no access token was sent"}. Open the app
+        with the link the server prints at startup (run <Cmd>pnpm open</Cmd>, or copy the <Cmd>http://127.0.0.1:4601/?token=…</Cmd> link from the
+        server log). The token is read once from the link, kept in this browser only, and removed from the address bar.
+      </p>
+      {message ? <p className="mt-1 font-mono text-[11px] text-fg-2">{message}</p> : null}
+      <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2">
+        <label className="flex min-w-[260px] flex-1 flex-col gap-1">
+          <span className="label">Paste access token</span>
+          <input
+            type="password"
+            autoComplete="off"
+            className="field font-mono"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="token from the server's startup link"
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={!value.trim()}>
+          Use token
+        </button>
+        {hadToken ? (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setToken(null);
+              void qc.invalidateQueries();
+            }}
+          >
+            Forget stored token
+          </button>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
+/** Inline error for a failed mutation (keeps panels compact). */
+export function MutationError({ error, what }: { error: unknown; what: string }) {
+  if (!error) return null;
+  if (isPermissionDenied(error)) return <PermissionDenied message={(error as ApiRequestError).message} />;
+  const e = error instanceof ApiRequestError ? error : null;
+  return (
+    <div role="alert" className="rounded-[3px] border border-risk/55 bg-risk/10 p-2 text-[12px] text-fg-1">
+      <span className="font-medium text-risk">{what} failed. </span>
+      {e ? (
+        e.kind === "unreachable" ? (
+          "The API is not reachable."
+        ) : e.code === "not_implemented" ? (
+          "Not available in this build yet (the server returned not_implemented). Nothing was changed."
+        ) : (
+          <>
+            {e.message}
+            {e.code ? <span className="ml-1 font-mono text-[11px] text-fg-2">({e.code})</span> : null}
+          </>
+        )
+      ) : (
+        String(error)
+      )}
     </div>
   );
 }

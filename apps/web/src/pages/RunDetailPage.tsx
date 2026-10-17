@@ -12,8 +12,10 @@ import { Link, useParams } from "react-router";
 import { useRun, useRunEvents, useRunFindings } from "../api/queries";
 import { BasisBadge, CoverageBadge, FixtureBadge, RunStatusBadge } from "../components/badges";
 import { FindingsTable } from "../components/FindingsTable";
+import { useAskWitnessDrawer } from "../components/askwitness/AskWitnessDrawer";
 import { PolicyPanel } from "../components/PolicyPanel";
 import { CoveragePanel } from "../components/run/CoveragePanel";
+import { SupervisedRunPanel } from "../components/run/StartSupervisedRun";
 import { EventInspector } from "../components/run/EventInspector";
 import { Timeline } from "../components/run/Timeline";
 import { EmptyState, ErrorState, PageSkeleton, SkeletonRows } from "../components/states";
@@ -46,6 +48,7 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
   const { run, policy, coverage, counts } = detail;
   const { get, set, clear } = useUrlFilters();
   const findings = useRunFindings(runId);
+  const askWitness = useAskWitnessDrawer();
 
   const processRaw = get("process_id");
   const eventQuery: RunEventsQueryInput = {
@@ -93,6 +96,11 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
               all runs
             </Link>
           </span>
+        }
+        actions={
+          <button type="button" className="btn" aria-haspopup="dialog" onClick={() => askWitness.open({ scope: "run", runId })}>
+            Ask about this run
+          </button>
         }
       />
 
@@ -153,6 +161,7 @@ function RunWorkspace({ runId, detail }: { runId: string; detail: RunDetailRespo
         <CoveragePanel coverage={coverage} runLevel={run.coverage_status} />
         <PolicyPanel policy={policy} title="Applicable policy" />
       </div>
+      {detail.supervised ? <SupervisedRunPanel sr={detail.supervised} /> : null}
 
       <Panel
         className="mt-3"

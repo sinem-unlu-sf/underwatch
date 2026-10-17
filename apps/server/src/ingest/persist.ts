@@ -13,6 +13,7 @@ import type {
 import type { TableCodec } from "../db/codec";
 import { transaction, type Db } from "../db/connection";
 import * as t from "../db/tables";
+import { recordRedactionOutcomes, redactionKey, sanitizeRunBundle, type SanitizeOptions } from "./sanitize";
 
 /** Everything recorded for one run. A parsed FixtureRunFile satisfies this; a live adapter would produce it too. */
 export interface RunBundle {
@@ -70,13 +71,19 @@ export function emptyCounts(): Record<BundleTable, TableCounts> {
  * inserts nothing. Existing rows are never overwritten (a finding's status may since have been changed by a user).
  * All-or-nothing per bundle.
  */
-export function persistRunBundle(db: Db, bundle: RunBundle): PersistResult {
+export function persistRunBundle(db: Db, input: RunBundle, options: SanitizeOptions = {}): PersistResult {
   const counts = emptyCounts();
   const conflicts: IngestConflict[] = [];
+  // Secret redaction BEFORE anything is written (fail closed; see ./sanitize). Rows inserted earlier by another path
+  // are NOT rewritten (INSERT OR IGNORE): such paths must sanitize themselves (supervised start(), Tetragon ingest).
+  const { bundle, records } = sanitizeRunBundle(input, options);
+  const inserted = new Set<string>();
 
   const put = <T extends object>(codec: TableCodec<T>, name: BundleTable, value: T, ignore: readonly (keyof T)[] = []) => {
     if (codec.insertOrIgnore(db, value)) {
       counts[name].inserted++;
+      const id = (value as { id?: unknown; run_id?: unknown }).id ?? (value as { run_id?: unknown }).run_id;
+      if (typeof id === "string") inserted.add(redactionKey(name, id));
       return;
     }
     counts[name].skipped++;
@@ -107,6 +114,8 @@ export function persistRunBundle(db: Db, bundle: RunBundle): PersistResult {
     for (const s of bundle.safeguards) put(t.safeguards, "safeguards", s);
     for (const v of bundle.verification_runs) put(t.verificationRuns, "verification_runs", v);
     put(t.coverageReports, "coverage_reports", bundle.coverage);
+    // Per-record redaction outcome, only for rows written now (a skipped row keeps the outcome of its first write).
+    recordRedactionOutcomes(db, records, inserted);
   });
 
   return { counts, conflicts };

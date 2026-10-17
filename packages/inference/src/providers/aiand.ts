@@ -1,10 +1,13 @@
 import { redact, scanForLeaks } from "@kw/redaction";
+import type { AskWitnessModelOutput } from "@kw/schema";
+import { askWitnessCacheVariant, askWitnessTemplate, type AskWitnessHistoryEntry, validateAskWitnessOutput } from "../askwitness";
 import { type EvidenceBundle, verifyBundleHash } from "../bundle";
 import { createCache, inferenceCacheKey, type InferenceCache } from "../cache";
 import { checkExplanationCitations, checkSafeguardCitations, type CheckedExplanation, type CheckedSafeguardProposal } from "../citations";
 import { type ChatMessage, EXPLAIN_FINDING_V1, PROPOSE_SAFEGUARD_V1, type PromptTemplate, repairMessage } from "../prompts";
 import { Explanation, parseJsonLoose, SafeguardProposal, zodErrors } from "../schemas";
-import { fetchTransport, type HttpResponse, type HttpTransport, parseRetryAfter, requestWithTimeout, TimeoutError } from "../transport";
+import { createAiAndHttpsTransport, EndpointPolicyError, guardAiAndTransport, tlsVerificationProblem, validateAiAndEndpoint } from "../endpoint-policy";
+import { type HttpResponse, type HttpTransport, parseRetryAfter, requestWithTimeout, TimeoutError } from "../transport";
 import { type CallOptions, emptyMeta, type HealthInfo, type InferenceMeta, type InferenceProvider, type InferenceResult, type TemplateCallOptions, type TemplateValidator } from "../types";
 
 /**
@@ -94,6 +97,12 @@ export interface AiAndDeps {
   cache?: InferenceCache;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
+  /**
+   * Env consulted by the endpoint policy at construction AND before every request (NODE_ENV,
+   * KW_ALLOW_INSECURE_AIAND_HTTP, KW_AIAND_ALLOWED_HOSTS). Default: the live process.env. NODE_TLS_REJECT_UNAUTHORIZED is
+   * always also checked on the real process.env.
+   */
+  policyEnv?: () => NodeJS.ProcessEnv;
 }
 
 type ChatOk = {
@@ -150,17 +159,42 @@ export class AiAndProvider implements InferenceProvider {
   readonly #random: () => number;
   /** Single-flight: concurrent calls for the same cache key share one upstream request. */
   readonly #inflight = new Map<string, Promise<InferenceResult<unknown>>>();
+  /** Non-null when the configured endpoint failed the policy at construction; no request is ever attempted then. */
+  readonly #endpointError: string | null;
 
   constructor(config: Partial<AiAndConfig> & { apiKey: string | null }, deps: AiAndDeps = {}) {
     const { apiKey, ...rest } = config;
     this.#apiKey = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : null;
     this.#cfg = { ...DEFAULT_AIAND_CONFIG, configuredVia: null, ...rest };
-    this.#cfg.baseUrl = this.#cfg.baseUrl.replace(/\/+$/, "");
+    const policyEnv = deps.policyEnv ?? (() => process.env);
+    const ep = validateAiAndEndpoint(this.#cfg.baseUrl, policyEnv());
+    // Never keep a rejected URL around: it may carry credentials and describe() would expose it.
+    this.#endpointError = ep.ok ? tlsVerificationProblem(process.env, policyEnv()) : ep.reason;
+    this.#cfg.baseUrl = ep.ok ? ep.url : "[rejected]";
     this.model = this.#cfg.model;
-    this.#transport = deps.transport ?? fetchTransport;
+    // Every request (injected test transports included) is re-validated immediately before it is sent.
+    this.#transport = guardAiAndTransport(deps.transport ?? createAiAndHttpsTransport(), policyEnv);
     this.#cache = deps.cache ?? createCache({ dir: this.#cfg.cacheDir });
     this.#sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.#random = deps.random ?? Math.random;
+  }
+
+  /** Where the key came from, as a NAME only ("AIAND_API_KEY (process env)" / "AIAND_API_KEY (.env.local)"); never the value or a path. */
+  get keySource(): string | null {
+    const v = this.#cfg.configuredVia;
+    if (!v) return this.#apiKey ? "AIAND_API_KEY" : null;
+    if (v.includes("process env")) return "AIAND_API_KEY (process env)";
+    const m = /in (.+)$/.exec(v);
+    return m ? `AIAND_API_KEY (${m[1]!.split(/[\\/]/).pop()})` : "AIAND_API_KEY";
+  }
+
+  /** Host of the configured endpoint (no path, no credentials), or null when the endpoint was rejected. */
+  get baseHost(): string | null {
+    try {
+      return new URL(this.#cfg.baseUrl).host;
+    } catch {
+      return null;
+    }
   }
 
   get configured(): boolean {
@@ -170,7 +204,7 @@ export class AiAndProvider implements InferenceProvider {
   /** Safe description for status pages: never includes the key. */
   describe() {
     const { cacheDir, ...cfg } = this.#cfg;
-    return { ...cfg, cache: cacheDir ? "memory+file" : "memory", api_key: this.#apiKey ? "[configured]" : null, verification: AIAND_API_SURFACE.verification };
+    return { ...cfg, cache: cacheDir ? "memory+file" : "memory", api_key: this.#apiKey ? "[configured]" : null, endpoint_error: this.#endpointError, verification: AIAND_API_SURFACE.verification };
   }
 
   toJSON() {
@@ -201,12 +235,17 @@ export class AiAndProvider implements InferenceProvider {
     return this.#run(tpl, bundle, validate, opts, opts?.cacheVariant);
   }
 
+  askWitness(question: string, bundle: EvidenceBundle, history: readonly AskWitnessHistoryEntry[], opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
+    return this.runTemplate(askWitnessTemplate(question, history, bundle.scope), bundle, validateAskWitnessOutput, { ...opts, cacheVariant: askWitnessCacheVariant(question, history) });
+  }
+
   async health(opts: CallOptions = {}): Promise<InferenceResult<HealthInfo>> {
     const t0 = Date.now();
     const meta = (extra: Partial<InferenceMeta> = {}) =>
       emptyMeta({ provider: this.id, model: this.model, prompt_version: "health", schema_version: "health", latency_ms: Date.now() - t0, ...extra });
     try {
       if (!this.#apiKey) return { status: "unavailable", reason: "not_configured", detail: "ai& not configured", meta: meta() };
+      if (this.#endpointError) return { status: "unavailable", reason: "endpoint_rejected", detail: `ai& endpoint rejected: ${this.#endpointError}`, meta: meta() };
       let res: HttpResponse;
       try {
         res = await requestWithTimeout(
@@ -216,6 +255,7 @@ export class AiAndProvider implements InferenceProvider {
           opts.signal,
         );
       } catch (e) {
+        if (e instanceof EndpointPolicyError) return { status: "unavailable", reason: "endpoint_rejected", detail: e.message, meta: meta({ attempts: 1 }) };
         if (e instanceof TimeoutError) return { status: "timeout", detail: e.message, meta: meta({ attempts: 1 }) };
         return { status: "unavailable", reason: "transport_unreachable", detail: "could not reach ai& (network error)", meta: meta({ attempts: 1 }) };
       }
@@ -275,6 +315,7 @@ export class AiAndProvider implements InferenceProvider {
       });
     try {
       if (!this.#apiKey) return { status: "unavailable", reason: "not_configured", detail: "ai& not configured", meta: meta({ structured_mode: null }) };
+      if (this.#endpointError) return { status: "unavailable", reason: "endpoint_rejected", detail: `ai& endpoint rejected: ${this.#endpointError}`, meta: meta({ structured_mode: null }) };
       if (!bundle || !Array.isArray(bundle.allowed_ids) || !verifyBundleHash(bundle)) {
         return { status: "error", http_status: null, detail: "evidence bundle failed its integrity check (modified after build?)", meta: meta() };
       }
@@ -415,6 +456,8 @@ export class AiAndProvider implements InferenceProvider {
         );
       } catch (e) {
         if (signal?.aborted) return { kind: "terminal", result: { status: "error", http_status: null, detail: CANCELLED } };
+        // Policy refusals (incl. a blocked redirect) are never retried: nothing was or will be sent to another endpoint.
+        if (e instanceof EndpointPolicyError) return { kind: "terminal", result: { status: "unavailable", reason: "endpoint_rejected", detail: e.message } };
         const isTimeout = e instanceof TimeoutError;
         if (retry < this.#cfg.maxRetries && (!isTimeout || this.#cfg.retryOnTimeout)) {
           await this.#sleep(this.#backoff(retry));

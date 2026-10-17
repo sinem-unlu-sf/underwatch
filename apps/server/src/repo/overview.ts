@@ -1,4 +1,4 @@
-import { OVERVIEW_ITEM_LIMIT, type EntityTotals, type OverviewResponse } from "@kw/schema";
+import { OVERVIEW_ITEM_LIMIT, type ComponentStatus, type EntityTotals, type OverviewResponse } from "@kw/schema";
 import { stmt } from "../db/codec";
 import type { Db } from "../db/connection";
 import { dataMode, observationComponents, worstStatus } from "../status";
@@ -28,10 +28,10 @@ function entityTotals(db: Db): { fixture: EntityTotals; live: EntityTotals; all:
 }
 
 /** Every number here is computed from persisted rows at request time. */
-export function getOverview(db: Db, env: NodeJS.ProcessEnv): OverviewResponse {
+export function getOverview(db: Db, env: NodeJS.ProcessEnv, neo4j?: ComponentStatus, inference?: { id: string; model: string }): OverviewResponse {
   const limit = OVERVIEW_ITEM_LIMIT;
   const totals = entityTotals(db);
-  const components = observationComponents(env);
+  const components = observationComponents(env, neo4j, inference, db);
 
   return {
     generated_at: new Date().toISOString(),

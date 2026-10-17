@@ -1,7 +1,9 @@
+import type { AskWitnessModelOutput } from "@kw/schema";
+import { ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCHEMA_VERSION, type AskWitnessHistoryEntry } from "../askwitness";
 import type { EvidenceBundle } from "../bundle";
 import type { CheckedExplanation, CheckedSafeguardProposal } from "../citations";
 import { EXPLAIN_FINDING_V1, PROPOSE_SAFEGUARD_V1, type PromptTemplate } from "../prompts";
-import { emptyMeta, type HealthInfo, type InferenceProvider, type InferenceResult, type TemplateValidator } from "../types";
+import { type CallOptions, emptyMeta, type HealthInfo, type InferenceProvider, type InferenceResult, type TemplateValidator } from "../types";
 
 /** Used when ai& is not configured. Always unavailable; never touches the network. */
 export class NullProvider implements InferenceProvider {
@@ -27,6 +29,10 @@ export class NullProvider implements InferenceProvider {
   }
   async runTemplate<T>(tpl: PromptTemplate, bundle: EvidenceBundle, _validate: TemplateValidator<T>): Promise<InferenceResult<T>> {
     const r = this.#unavailable(tpl.prompt_version, tpl.schema_version);
+    return { ...r, meta: { ...r.meta, bundle_sha256: bundle?.sha256 ?? null } };
+  }
+  async askWitness(_question: string, bundle: EvidenceBundle, _history: readonly AskWitnessHistoryEntry[] = [], _opts?: CallOptions): Promise<InferenceResult<AskWitnessModelOutput>> {
+    const r = this.#unavailable(ASK_WITNESS_PROMPT_VERSION, ASK_WITNESS_SCHEMA_VERSION);
     return { ...r, meta: { ...r.meta, bundle_sha256: bundle?.sha256 ?? null } };
   }
   async health(): Promise<InferenceResult<HealthInfo>> {

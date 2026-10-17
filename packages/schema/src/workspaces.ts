@@ -83,6 +83,14 @@ export const FileDiffPreview = z.object({
   unified_diff: z.string(),
   /** Set when an equivalent instruction already exists; the server then proposes no change (after === before). */
   duplicate_of: z.string().nullable(),
+  /**
+   * Heuristic warnings: existing lines (outside Kernel Witness blocks) that appear to explicitly ALLOW what the new
+   * instruction restricts. Reported for the user to resolve; the server never edits or removes those lines.
+   * Optional for compatibility (absent = not checked).
+   */
+  contradictions: z
+    .array(z.object({ line_number: z.number().int().positive(), line: z.string(), reason: z.string() }))
+    .optional(),
   generated_at: Timestamp,
 });
 export type FileDiffPreview = z.infer<typeof FileDiffPreview>;

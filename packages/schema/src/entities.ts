@@ -27,6 +27,7 @@ import {
   VerificationRunStatus,
 } from "./enums";
 import { idPattern } from "./ids";
+import { ReportedTaskClaim, SecurityOutcome, TaskOutcome } from "./outcomes";
 
 /** ISO-8601 timestamp, UTC "Z" or explicit offset. */
 export const Timestamp = z.iso.datetime({ offset: true });
@@ -250,6 +251,16 @@ export const VerificationRun = z.object({
   notes: z.string().nullable(),
   started_at: Timestamp,
   ended_at: Timestamp.nullable(),
+  /**
+   * Issue 4: two SEPARATE, independently evidenced outcomes (see outcomes.ts). Optional so historical records and
+   * fixtures stay valid; when absent, readers derive them with outcomesForRun() (legacy -> security "inferred", task
+   * always "unknown"). The legacy single-value fields above (result, prohibited_behavior_*, legitimate_behavior_worked)
+   * are kept unchanged and are never reinterpreted as a verified task outcome.
+   */
+  security_outcome: SecurityOutcome.optional(),
+  task_outcome: TaskOutcome.optional(),
+  /** The agent's own completion claim (basis "reported"); never sets task_outcome. */
+  reported_task_claim: ReportedTaskClaim.nullable().optional(),
 });
 export type VerificationRun = z.infer<typeof VerificationRun>;
 

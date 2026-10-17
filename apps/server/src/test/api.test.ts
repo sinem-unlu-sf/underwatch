@@ -121,7 +121,7 @@ describe("overview", () => {
     expect(body.recent_verification_results.count).toBe(2);
     expect(body.recent_verification_results.items[0]?.safeguard_title).toBe("Deny .env reads");
     expect(body.observation_health.overall).toBe("not_implemented");
-    expect(body.observation_health.components.find((c) => c.id === "claude-code")?.status).toBe("not_implemented");
+    expect(body.observation_health.components.find((c) => c.id === "claude-code")?.status).toBe("configured");
 
     await postJson(ctx.app, apiPaths.findingStatus(FX_NEW_FINDING), { to: "confirmed" });
     const after = await getJson<OverviewResponse>(ctx.app, apiPaths.overview());
@@ -223,9 +223,11 @@ describe("run, event, finding, safeguard, evidence, settings endpoints", () => {
 
   it("reports settings honestly and never echoes secret values", async () => {
     const plain = await getJson<SettingsStatusResponse>(ctx.app, apiPaths.settingsStatus());
-    expect(plain.body.adapter.status).toBe("not_implemented");
+    expect(plain.body.adapter.status).toBe("configured");
     expect(plain.body.collectors.length).toBeGreaterThan(0);
-    expect(plain.body.collectors.every((c) => c.status === "not_implemented")).toBe(true);
+    // Only the observers actually wired into the Docker harness are "configured"; the rest stay not_implemented.
+    expect(plain.body.collectors.filter((c) => c.status === "configured").map((c) => c.id).sort()).toEqual(["git_observer", "kernel_tracer", "network_proxy"]);
+    expect(plain.body.collectors.filter((c) => c.status !== "configured").every((c) => c.status === "not_implemented")).toBe(true);
     expect(plain.body.ai_inference).toMatchObject({ status: "not_configured", configured_via: null });
     expect(plain.body.neo4j).toMatchObject({ status: "not_configured", configured_via: null });
     expect(plain.body.policy.active_policy_version_id).toBe("pol_live_api");
@@ -238,8 +240,10 @@ describe("run, event, finding, safeguard, evidence, settings endpoints", () => {
       expect(res.body).not.toContain(secret);
       expect(res.body).not.toContain("user:pw");
       const body = res.json() as SettingsStatusResponse;
-      expect(body.ai_inference).toMatchObject({ status: "not_implemented", configured_via: "AIAND_API_KEY" });
-      expect(body.neo4j).toMatchObject({ status: "not_implemented", configured_via: "NEO4J_URI" });
+      // Tests inject no provider (NullProvider): a key in the env alone does not make ai& active.
+      expect(body.ai_inference).toMatchObject({ status: "disabled", configured_via: "AIAND_API_KEY" });
+      // No KwGraph is injected in tests: the graph runtime reports not_configured (never the URI or its credentials).
+      expect(body.neo4j).toMatchObject({ status: "not_configured", configured_via: null });
     } finally {
       await configured.close();
     }

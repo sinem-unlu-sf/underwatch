@@ -6,9 +6,12 @@
  */
 import { existsSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { KwGraph } from "@kw/graph";
 import { FIXTURE_RUNS_DIR, REPO_ROOT, resolveDbLocation } from "../config";
 import { openDatabase } from "../db/connection";
+import { createGraphRuntime } from "../graph/runtime";
 import { importFixtureFile, listFixtureFiles, totalCounts, type FixtureImportOutcome } from "../ingest/fixtures";
+import { fixtureAgreement, formatAgreement } from "../supervised/fixture-agreement";
 
 const args = process.argv.slice(2);
 const fresh = args.includes("--fresh");
@@ -34,6 +37,19 @@ if (fresh && location.path !== ":memory:") {
 
 const db = openDatabase(location.path);
 const outcomes: FixtureImportOutcome[] = files.map((file) => importFixtureFile(db, file));
+
+// Re-project every run into Neo4j (idempotent replace). Optional: skipped with a note when Neo4j is unreachable.
+if (process.env.KW_GRAPH !== "off") {
+  const quiet = { warn: () => undefined, info: () => undefined, error: () => undefined } as unknown as Parameters<typeof createGraphRuntime>[0]["log"];
+  const runtime = createGraphRuntime({ db, log: quiet, env: process.env, kw: new KwGraph({ cwd: REPO_ROOT }) });
+  const sync = await runtime.syncAll("seed:fixtures");
+  if (sync.unavailable) console.log(`Neo4j projection skipped (${sync.unavailable.kind}). SQLite import is complete; the graph rebuilds on server start.`);
+  else {
+    console.log(`Neo4j projection: ${sync.runs.filter((r) => r.ok).length}/${sync.runs.length} run(s) projected.`);
+    for (const r of sync.runs.filter((x) => !x.ok)) console.log(`  ! ${r.run_id}: ${r.error?.kind} ${r.error?.message ?? ""}`);
+  }
+  await runtime.close();
+}
 db.close();
 
 for (const o of outcomes) {
@@ -55,6 +71,15 @@ console.log("\nTotals (inserted / skipped):");
 const totals = totalCounts(outcomes);
 const width = Math.max(...Object.keys(totals).map((k) => k.length));
 for (const [table, c] of Object.entries(totals)) console.log(`  ${table.padEnd(width)}  ${String(c.inserted).padStart(5)} / ${c.skipped}`);
+
+// Deterministic analysis over the fixtures, compared with their hand-written findings. Read-only: fixture findings
+// stay exactly as authored (nothing from the engine is written for fixture runs).
+try {
+  console.log("\n@kw/analysis vs hand-labeled fixture findings (not stored):");
+  console.log(formatAgreement(fixtureAgreement(files.filter((f) => outcomes.find((o) => o.file === f)?.ok))));
+} catch (err) {
+  console.log(`@kw/analysis agreement skipped: ${(err as Error).message}`);
+}
 
 const failed = outcomes.filter((o) => !o.ok).length;
 console.log(`\n${outcomes.length - failed} of ${outcomes.length} fixture files imported${failed ? `, ${failed} failed validation` : ""}.`);

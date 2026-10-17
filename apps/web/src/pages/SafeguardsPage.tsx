@@ -21,6 +21,8 @@ import { EmptyState, ErrorState, SkeletonBlock } from "../components/states";
 import { Field, KeyValue, Mono, PageHeader, Panel, Time } from "../components/ui";
 import { humanize } from "../lib/format";
 import { pickEnum, useUrlFilters } from "../lib/searchParams";
+import { outcomesForRun } from "@kw/schema";
+import { OutcomePair } from "../components/safeguards/OutcomePair";
 
 const FILTER_KEYS = ["approval_status", "application_status", "verification_status", "finding_id", "fixture"];
 
@@ -101,7 +103,8 @@ export function SafeguardsPage() {
           ) : null}
         </div>
         <p className="mt-2 text-[11px] text-fg-2">
-          Generating, approving, applying and verifying safeguards is pending architecture review. This page lists recorded safeguards only.
+          Open a safeguard to review its diff, approve, edit, reject, roll back or run verification. New safeguards are created from a finding
+          (“Create safeguard” on the finding page).
         </p>
       </div>
 
@@ -124,7 +127,7 @@ export function SafeguardsPage() {
           ) : (
             <EmptyState title="No safeguards recorded">
               A safeguard is proposed from a confirmed finding: a CLAUDE.md instruction, a Claude Code permission rule, a hook/policy check, or a
-              regression test. Proposal and application are pending architecture review.
+              regression test. Use “Create safeguard” on a finding page.
             </EmptyState>
           )}
         </Panel>
@@ -149,7 +152,9 @@ function SafeguardCard({ s }: { s: SafeguardListItem }) {
       title={
         <span className="flex flex-wrap items-center gap-2 normal-case">
           <FixtureBadge isFixture={s.is_fixture} />
-          <span className="text-[13px] tracking-normal text-fg-0">{s.title}</span>
+          <Link to={`/safeguards/${encodeURIComponent(s.id)}`} className="text-[13px] tracking-normal text-fg-0 hover:underline">
+            {s.title}
+          </Link>
         </span>
       }
       aside={
@@ -215,6 +220,8 @@ function SafeguardCard({ s }: { s: SafeguardListItem }) {
                 <div className="text-[12px] text-fg-1">
                   Scenario <Mono>{v.scenario_id}</Mono>: {v.scenario_description}
                 </div>
+                <OutcomePair outcomes={outcomesForRun(v)} compact />
+                <div className="label">Legacy record fields (not a task outcome)</div>
                 <div className="grid grid-cols-[max-content_auto] items-center gap-x-3 gap-y-1 text-[12px]">
                   <span className="text-fg-2">Prohibited behavior attempted</span>
                   <TriState value={v.prohibited_behavior_attempted} />

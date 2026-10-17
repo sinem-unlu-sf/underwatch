@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { AIAND_API_SURFACE, AiAndProvider, type AiAndConfig, type AiAndDeps, DEFAULT_AIAND_CONFIG, type StructuredMode } from "./providers/aiand";
+import { type EndpointCheck, tlsVerificationProblem, validateAiAndEndpoint } from "./endpoint-policy";
 import { NullProvider } from "./providers/null";
 import type { InferenceProvider } from "./types";
 
@@ -36,6 +37,11 @@ export interface LoadedAiAndConfig {
   key_source: string | null;
   env_file: string | null;
   env_file_exists: boolean;
+  /**
+   * Result of the HTTPS/host endpoint policy at load time (reason only, never the raw URL). When not ok, the provider
+   * built from this config refuses every call with reason "endpoint_rejected" and sends nothing.
+   */
+  endpoint: EndpointCheck;
 }
 
 /**
@@ -44,6 +50,8 @@ export interface LoadedAiAndConfig {
  * to not send it), AIAND_STRUCTURED_OUTPUT (json_schema|json_object|prompt_only), AIAND_TIMEOUT_MS, KW_INFERENCE_CACHE_DIR.
  */
 export function loadAiAndConfig(opts: { env?: NodeJS.ProcessEnv; envFile?: string | null; cwd?: string } = {}): LoadedAiAndConfig {
+  // Endpoint policy inputs (NODE_ENV, KW_ALLOW_INSECURE_AIAND_HTTP, KW_AIAND_ALLOWED_HOSTS) come from the process env only,
+  // never from the env file. AIAND_BASE_URL itself may come from either and is validated below.
   const env = opts.env ?? process.env;
   const root = findWorkspaceRoot(opts.cwd);
   const envFile = opts.envFile !== undefined ? opts.envFile : (env.KW_ENV_FILE ?? (root ? join(root, ".env.local") : null));
@@ -73,11 +81,16 @@ export function loadAiAndConfig(opts: { env?: NodeJS.ProcessEnv; envFile?: strin
     effortRaw !== undefined ? (effortRaw.trim() === "" || effortRaw.trim() === "omit" ? null : effortRaw.trim()) : model === DEFAULT_AIAND_CONFIG.model ? DEFAULT_AIAND_CONFIG.reasoningEffort : null;
   const mode = get("AIAND_STRUCTURED_OUTPUT");
   const timeout = Number(get("AIAND_TIMEOUT_MS"));
+  const rawBaseUrl = get("AIAND_BASE_URL") ?? DEFAULT_AIAND_CONFIG.baseUrl;
+  const checked = validateAiAndEndpoint(rawBaseUrl, env);
+  const tls = checked.ok ? tlsVerificationProblem(process.env, env) : null;
+  const endpoint: EndpointCheck = tls ? { ok: false, reason: tls } : checked;
 
   return {
     config: {
       apiKey: key,
-      baseUrl: get("AIAND_BASE_URL") ?? DEFAULT_AIAND_CONFIG.baseUrl,
+      // canonical URL when valid; otherwise the raw value is passed on so the provider re-rejects it (and never stores it)
+      baseUrl: endpoint.ok ? endpoint.url : rawBaseUrl,
       model,
       reasoningEffort,
       structuredOutput: mode === "json_object" || mode === "prompt_only" || mode === "json_schema" ? (mode as StructuredMode) : DEFAULT_AIAND_CONFIG.structuredOutput,
@@ -88,6 +101,7 @@ export function loadAiAndConfig(opts: { env?: NodeJS.ProcessEnv; envFile?: strin
     key_source: keySource,
     env_file: envFile,
     env_file_exists: exists,
+    endpoint,
   };
 }
 
@@ -95,5 +109,7 @@ export function loadAiAndConfig(opts: { env?: NodeJS.ProcessEnv; envFile?: strin
 export function createInferenceProvider(opts: { env?: NodeJS.ProcessEnv; envFile?: string | null; cwd?: string; deps?: AiAndDeps } = {}): InferenceProvider {
   const loaded = loadAiAndConfig(opts);
   if (!loaded.config.apiKey) return new NullProvider("ai& not configured");
-  return new AiAndProvider(loaded.config, opts.deps);
+  // The same env that was used for load-time validation drives the per-request re-validation (unless a test injects one).
+  const policyEnv = opts.deps?.policyEnv ?? (opts.env ? () => opts.env! : undefined);
+  return new AiAndProvider(loaded.config, { ...opts.deps, ...(policyEnv ? { policyEnv } : {}) });
 }

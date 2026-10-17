@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createRedactionContext, REDACTION_RULESET_VERSION, redact, type RedactOptions, type RedactionContext } from "@kw/redaction";
-import type { Event, Evidence, Finding, PolicyVersion } from "@kw/schema";
+import { outcomesForRun, type CoverageReport, type Event, type Evidence, type Finding, type PolicyVersion, type Safeguard, type VerificationRun } from "@kw/schema";
 
 export const BUNDLE_VERSION = "kw.bundle@1";
 
@@ -20,7 +20,8 @@ export type BundleFieldValue = string | number | boolean | null | string[];
 export interface BundleItem {
   /** The citable id of this item (fnd_/evt_/evd_ id, or "<policy id>#<rule id>"). Never redacted. */
   evidence_id: string;
-  kind: "finding" | "event" | "evidence" | "policy_rule";
+  /** coverage / safeguard / related_finding are Ask Witness context items (optional inputs; all basis "derived"). */
+  kind: "finding" | "event" | "evidence" | "policy_rule" | "coverage" | "safeguard" | "related_finding" | "run" | "overview" | "verification" | "digest";
   basis: "reported" | "observed" | "derived" | null;
   source: string | null;
   timestamp: string | null;
@@ -37,6 +38,11 @@ export interface BundleItem {
 
 export interface EvidenceBundle {
   bundle_version: typeof BUNDLE_VERSION;
+  /**
+   * Ask Witness scope (absent = finding scope, v1). For run / workspace scope, finding_id is "" and run_id is the run id
+   * (run scope) or "" (workspace scope). Part of the hashed body when present.
+   */
+  scope?: { kind: "finding" | "run" | "workspace"; id: string | null };
   finding_id: string;
   run_id: string;
   items: BundleItem[];
@@ -59,6 +65,17 @@ export interface BuildBundleInput {
   evidence?: readonly Evidence[];
   policy?: PolicyVersion | null;
   limits?: Partial<BundleLimits>;
+  /**
+   * Ask Witness context (all optional, appended after the finding's own events/evidence):
+   * - additionalEvents: other events of the SAME run that touch the finding's target resources (capped with maxEvents).
+   * - coverage: the run's observation coverage plus KW-derived facts about observed activity on the targets.
+   * - safeguards: existing safeguards for this finding with their latest verification run.
+   * - relatedFindings: findings in OTHER runs that touched the same target (summary fields only, never their events).
+   */
+  additionalEvents?: readonly Event[];
+  coverage?: { report: CoverageReport | null; targets: readonly string[]; observed_event_ids_on_targets: readonly string[] } | null;
+  safeguards?: ReadonlyArray<{ safeguard: Safeguard; verification: VerificationRun | null }>;
+  relatedFindings?: ReadonlyArray<{ finding: Finding; shared_targets: readonly string[] }>;
   /** Extra redaction options (e.g. knownSecrets: the configured ai& key, run placeholders). */
   redaction?: Omit<RedactOptions, "context">;
 }
@@ -85,7 +102,8 @@ export function sha256(s: string): string {
   return createHash("sha256").update(s, "utf8").digest("hex");
 }
 
-class ItemBuilder {
+/** Exported for scoped bundles (scoped-bundle.ts): one redaction/sanitize/truncate path for every untrusted string. */
+export class ItemBuilder {
   placeholders = 0;
   detectors = new Set<string>();
   truncated = false;
@@ -215,7 +233,10 @@ export function buildEvidenceBundle(input: BuildBundleInput): EvidenceBundle {
 
   // 3. events: the finding's related events, in the finding's order, capped.
   const evById = new Map((input.events ?? []).map((e) => [e.id, e]));
-  const chosenEvents = f.related_event_ids.map((id) => evById.get(id)).filter((e): e is Event => e !== undefined);
+  const relatedEvents = f.related_event_ids.map((id) => evById.get(id)).filter((e): e is Event => e !== undefined);
+  const relatedIds = new Set(relatedEvents.map((e) => e.id));
+  const extraEvents = (input.additionalEvents ?? []).filter((e) => !relatedIds.has(e.id) && e.run_id === f.run_id);
+  const chosenEvents = [...relatedEvents, ...extraEvents];
   omitted.events += Math.max(0, chosenEvents.length - limits.maxEvents);
   const linkedEvidence: string[] = [];
   for (const e of chosenEvents.slice(0, limits.maxEvents)) {
@@ -252,7 +273,7 @@ export function buildEvidenceBundle(input: BuildBundleInput): EvidenceBundle {
       redaction: b.finish(),
     });
   }
-  omitted.not_provided += f.related_event_ids.length - chosenEvents.length;
+  omitted.not_provided += f.related_event_ids.length - relatedEvents.length;
 
   // 4. evidence: finding.evidence_ids first, then evidence linked from included events
   const evdById = new Map((input.evidence ?? []).map((v) => [v.id, v]));
@@ -282,6 +303,103 @@ export function buildEvidenceBundle(input: BuildBundleInput): EvidenceBundle {
       },
       content: withheld ? null : b.text(v.excerpt),
       content_omitted: withheld || !v.excerpt ? "not_captured" : null,
+      truncated: b.truncated,
+      redaction: b.finish(),
+    });
+  }
+
+  // 4b. Ask Witness context items (deterministic KW records; free text is untrusted and redacted like everything else)
+  const cov = input.coverage;
+  if (cov && ID_RE.test(f.run_id)) {
+    const b = mk();
+    const r = cov.report;
+    items.push({
+      evidence_id: `${f.run_id}#coverage`,
+      kind: "coverage",
+      basis: "derived",
+      source: "kw_coverage",
+      timestamp: r?.generated_at ?? null,
+      links: cov.observed_event_ids_on_targets.filter((id) => ID_RE.test(id)).slice(0, 20),
+      fields: {
+        coverage_level: r?.level ?? "unknown (no coverage report recorded)",
+        active_sources: (r?.sources ?? []).filter((x) => x.active).map((x) => `${x.source}: ${x.categories.join(", ")}`).slice(0, 12),
+        inactive_sources: (r?.sources ?? []).filter((x) => !x.active).map((x) => x.source).slice(0, 12),
+        category_gaps: (r?.categories ?? []).filter((c) => c.status !== "observed").map((c) => `${c.category}: ${c.status}${c.note ? ` (${b.text(c.note, 200)})` : ""}`).slice(0, 12),
+        unsupported_capabilities: b.list(r?.unsupported_capabilities ?? []),
+        network_outcomes_observable: r?.network_outcomes_observable ?? null,
+        final_state_complete: r?.final_state_complete ?? null,
+        finding_targets: b.list(cov.targets),
+        observed_events_on_targets_in_run: cov.observed_event_ids_on_targets.length,
+      },
+      content: null,
+      content_omitted: "not_captured",
+      truncated: b.truncated,
+      redaction: b.finish(),
+    });
+  }
+  for (const { safeguard: sg, verification: v } of (input.safeguards ?? []).slice(0, 5)) {
+    if (!ID_RE.test(sg.id)) {
+      omitted.invalid_ids++;
+      continue;
+    }
+    const b = mk();
+    const vo = v ? outcomesForRun(v) : null;
+    items.push({
+      evidence_id: sg.id,
+      kind: "safeguard",
+      basis: "derived",
+      source: "kw_safeguards",
+      timestamp: sg.created_at,
+      links: v && ID_RE.test(v.id) ? [v.id] : [],
+      fields: {
+        type: sg.type,
+        title: b.text(sg.title, 300),
+        application_mechanism: b.text(sg.application_mechanism, 300),
+        approval_status: sg.approval_status,
+        application_status: sg.application_status,
+        // Issue 4: separate outcomes, authoritative. A blocked action is not a task success; task success needs
+        // independent completion checks (basis "observed").
+        security_outcome: vo ? vo.security_outcome.value : null,
+        security_outcome_basis: vo ? vo.security_outcome.basis : null,
+        task_outcome: vo ? vo.task_outcome.value : null,
+        task_outcome_basis: vo ? vo.task_outcome.basis : null,
+        last_verification_run_status: v?.status ?? null,
+        // Legacy single-value fields, namespaced so they are never read as a task outcome or a verification pass.
+        legacy_safeguard_verification_status: sg.verification_status,
+        legacy_last_verification_result: v?.result ?? null,
+        legacy_prohibited_behavior_blocked: v?.prohibited_behavior_blocked ?? null,
+        legacy_legitimate_behavior_worked: v?.legitimate_behavior_worked ?? null,
+      },
+      // Safeguard text (e.g. a CLAUDE.md instruction) is untrusted content like any repository file.
+      content: b.text(sg.content, 1200),
+      content_omitted: sg.content ? null : "not_captured",
+      truncated: b.truncated,
+      redaction: b.finish(),
+    });
+  }
+  for (const { finding: rf, shared_targets } of (input.relatedFindings ?? []).slice(0, 5)) {
+    if (!ID_RE.test(rf.id) || rf.id === f.id || rf.run_id === f.run_id) {
+      if (!ID_RE.test(rf.id)) omitted.invalid_ids++;
+      continue;
+    }
+    const b = mk();
+    items.push({
+      evidence_id: rf.id,
+      kind: "related_finding",
+      basis: "derived",
+      source: "kw_analysis",
+      timestamp: rf.created_at,
+      links: [],
+      fields: {
+        run_id: rf.run_id,
+        category: rf.category,
+        title: b.text(rf.title, 300),
+        severity: rf.severity,
+        status: rf.status,
+        shared_targets: b.list(shared_targets, 5),
+      },
+      content: null,
+      content_omitted: "not_captured",
       truncated: b.truncated,
       redaction: b.finish(),
     });

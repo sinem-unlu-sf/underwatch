@@ -1,22 +1,24 @@
-import { FINDING_STATUS_LABELS, SAFEGUARD_TYPE_LABELS, type Event, type FindingDetailResponse } from "@kw/schema";
+import { FINDING_STATUS_LABELS, type BundleEvidenceRef, type Event, type FindingDetailResponse } from "@kw/schema";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useFinding } from "../api/queries";
+import { AskWitnessPanel } from "../components/askwitness/AskWitnessPanel";
+import { EvidenceRefDrawer } from "../components/askwitness/EvidenceRef";
+import { FindingSafeguardsPanel, type CreateSafeguardRequest } from "../components/safeguards/FindingSafeguardsPanel";
 import {
-  ApplicationBadge,
-  ApprovalBadge,
   Badge,
   BasisBadge,
   CategoryLabel,
   FindingStatusBadge,
   FixtureBadge,
-  IntegrationStatusBadge,
   OutcomeBadge,
   RedactionBadge,
   SeverityBadge,
   SourceBadge,
-  VerificationBadge,
 } from "../components/badges";
 import { FindingActions } from "../components/FindingActions";
+import { EvidenceGraphPanel } from "../components/graph/EvidenceGraphPanel";
+import { BackToFindings } from "../components/findings-modes/BackToFindings";
 import { PolicyPanel } from "../components/PolicyPanel";
 import { EmptyState, ErrorState, PageSkeleton } from "../components/states";
 import { KeyValue, Mono, PageHeader, Panel, Time } from "../components/ui";
@@ -49,9 +51,23 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
   const reported = data.related_events.filter((e) => e.basis === "reported");
   const observed = data.related_events.filter((e) => e.basis === "observed");
   const derived = data.related_events.filter((e) => e.basis === "derived");
+  const [createReq, setCreateReq] = useState<CreateSafeguardRequest | null>(null);
+  const requestSafeguard = (investigationId: string | null) => setCreateReq((r) => ({ investigationId, n: (r?.n ?? 0) + 1 }));
+  const [openEvidence, setOpenEvidence] = useState<string | null>(null);
+  /** Page-local index so evidence ids cited by safeguards open the same drawer as Ask Witness citations. */
+  const pageIndex = useMemo(() => {
+    const m = new Map<string, BundleEvidenceRef>();
+    m.set(f.id, { evidence_id: f.id, kind: "finding", basis: "derived", source: null, timestamp: f.created_at, summary: f.title, run_id: run.id });
+    for (const e of data.related_events)
+      m.set(e.id, { evidence_id: e.id, kind: "event", basis: e.basis, source: e.source, timestamp: e.timestamp, summary: e.summary, run_id: run.id });
+    for (const ev of data.evidence)
+      m.set(ev.id, { evidence_id: ev.id, kind: "evidence", basis: null, source: ev.source_type, timestamp: ev.timestamp, summary: ev.source_reference, run_id: ev.run_id });
+    return m;
+  }, [data, f, run.id]);
 
   return (
     <div>
+      <BackToFindings className="mb-2 inline-block" />
       <PageHeader
         title={
           <>
@@ -108,6 +124,13 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
           <Panel title="Why it was flagged">
             <p className="whitespace-pre-wrap text-fg-0">{f.description || <span className="text-fg-2">No description recorded.</span>}</p>
           </Panel>
+
+          <AskWitnessPanel
+            finding={{ id: f.id, title: f.title, severity: f.severity, is_fixture: f.is_fixture }}
+            onCreateSafeguard={requestSafeguard}
+          />
+
+          <FindingSafeguardsPanel findingId={f.id} safeguards={data.safeguards} request={createReq} onOpenEvidence={setOpenEvidence} />
 
           <Panel title="Reported vs observed" aside={<span className="text-[11px]">{data.related_events.length} related events</span>} bodyClassName="">
             <div className="grid md:grid-cols-2">
@@ -204,6 +227,8 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
             )}
           </Panel>
 
+          <EvidenceGraphPanel findingId={f.id} onOpenEvidence={setOpenEvidence} />
+
           <div className="grid gap-3 md:grid-cols-2">
             <Panel title="Missing information">
               {f.missing_information.length === 0 ? (
@@ -230,10 +255,10 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
           <Panel title="Actions">
             <FindingActions findingId={f.id} runId={run.id} status={f.status} serverAllowed={data.allowed_transitions} />
             <div className="mt-3 border-t border-line pt-3">
-              <button type="button" className="btn" disabled title="Safeguard generation is pending architecture review">
-                Propose safeguard
+              <button type="button" className="btn" onClick={() => requestSafeguard(null)}>
+                Create safeguard
               </button>
-              <p className="mt-1 text-[11px] text-fg-2">Disabled: safeguard generation is pending architecture review.</p>
+              <p className="mt-1 text-[11px] text-fg-2">Generates proposals for review. Nothing is applied without a diff and your approval.</p>
             </div>
           </Panel>
 
@@ -266,52 +291,6 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
             )}
           </Panel>
 
-          <Panel title="AI explanation" aside={<span className="text-[11px]">ai& Inference</span>}>
-            <div className="hatch rounded-[3px] p-2">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-unknown">ai& not configured</span>
-                <IntegrationStatusBadge status={data.ai_explanation.status} />
-              </div>
-              <p className="mt-1 text-[12px] text-fg-1">{data.ai_explanation.detail}</p>
-              <p className="mt-1 text-[11px] text-fg-2">No explanation is generated or shown until the ai& provider is implemented and configured.</p>
-            </div>
-          </Panel>
-
-          <Panel title="Evidence graph" aside={<span className="text-[11px]">Neo4j</span>}>
-            <div className="hatch rounded-[3px] p-2">
-              <div className="font-medium text-unknown">Neo4j projection pending architecture review</div>
-              <p className="mt-1 text-[12px] text-fg-1">
-                The graph of entities connected to this finding is not available in the foundation build. The timeline links above use the same
-                underlying event and evidence records.
-              </p>
-            </div>
-          </Panel>
-
-          <Panel title={`Safeguards (${data.safeguards.length})`} bodyClassName="">
-            {data.safeguards.length === 0 ? (
-              <EmptyState title="No safeguards linked" />
-            ) : (
-              <ul className="divide-y divide-line">
-                {data.safeguards.map((s) => (
-                  <li key={s.id} className="space-y-1 px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <FixtureBadge isFixture={s.is_fixture} compact />
-                      <span className="font-medium">{s.title}</span>
-                    </div>
-                    <div className="text-[11px] text-fg-2">{SAFEGUARD_TYPE_LABELS[s.type]}</div>
-                    <div className="flex flex-wrap gap-1">
-                      <ApprovalBadge status={s.approval_status} />
-                      <ApplicationBadge status={s.application_status} />
-                      <VerificationBadge status={s.verification_status} />
-                    </div>
-                    <Link to={`/safeguards?finding_id=${encodeURIComponent(f.id)}`} className="text-[12px] text-focus hover:underline">
-                      view content
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
 
           <Panel title="Run">
             <KeyValue
@@ -325,6 +304,7 @@ function FindingWorkspace({ data }: { data: FindingDetailResponse }) {
           </Panel>
         </div>
       </div>
+      {openEvidence ? <EvidenceRefDrawer id={openEvidence} evidenceRef={pageIndex.get(openEvidence)} onClose={() => setOpenEvidence(null)} /> : null}
     </div>
   );
 }

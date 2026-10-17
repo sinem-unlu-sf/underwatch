@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { useRuns } from "../api/queries";
 import { CoverageBadge, FixtureBadge, RunStatusBadge, SeverityBadge } from "../components/badges";
 import { Pager } from "../components/Pager";
+import { StartSupervisedRun } from "../components/run/StartSupervisedRun";
 import { Cmd, EmptyState, ErrorState, SkeletonRows } from "../components/states";
 import { Field, Mono, PageHeader, Panel, Time } from "../components/ui";
 import { humanize, isoToLocalInput, localInputToIso, timezoneLabel, truncate } from "../lib/format";
@@ -41,6 +42,7 @@ export function RunsPage() {
   return (
     <div>
       <PageHeader title="Agent Runs" subtitle="Supervised agent sessions, most recent first." />
+      <StartSupervisedRun />
 
       <form onSubmit={onSearch} className="mb-3 flex flex-wrap items-end gap-3 rounded-[4px] border border-line bg-surface-1 p-3">
         <Field label="Search" htmlFor="runs-q">

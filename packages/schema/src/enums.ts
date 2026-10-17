@@ -154,6 +154,7 @@ export const SafeguardType = z.enum([
   "permission_rule",
   "hook_policy",
   "regression_test",
+  "kernel_enforcement",
 ]);
 export type SafeguardType = z.infer<typeof SafeguardType>;
 
@@ -162,6 +163,7 @@ export const SAFEGUARD_TYPE_LABELS: Record<SafeguardType, string> = {
   permission_rule: "Claude Code permission rule (enforced by the agent runtime)",
   hook_policy: "Hook / policy check",
   regression_test: "Regression test (verifies a specific outcome)",
+  kernel_enforcement: "Kernel enforcement (Tetragon deny-file-open in the disposable agent container)",
 };
 
 export const SafeguardApprovalStatus = z.enum(["proposed", "approved", "rejected"]);

@@ -9,11 +9,19 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
-    "seed:fixtures": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx src/scripts/seed-fixtures.ts"
+    "seed:fixtures": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx src/scripts/seed-fixtures.ts",
+    "demo:reset": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx src/scripts/demo-reset.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.1",
+    "@kw/adapter-claude-code": "workspace:*",
+    "@kw/analysis": "workspace:*",
+    "@kw/graph": "workspace:*",
+    "@kw/inference": "workspace:^",
+    "@kw/observer-tetragon": "workspace:*",
+    "@kw/redaction": "workspace:^",
     "@kw/schema": "workspace:*",
+    "diff": "^8",
     "fastify": "^5.12.7",
     "zod": "^4.6.7"
   },

@@ -465,3 +465,40 @@ describe("configuration", () => {
     expect(parseDotenv("A=1\n# B=2\nexport C='x y'\nD=z # comment")).toEqual({ A: "1", C: "x y", D: "z" });
   });
 });
+
+// ------------------------------------------------------------------------------------------------ runTemplate (Ask Witness seam)
+
+describe("runTemplate (generic structured call)", () => {
+  const tplFor = (question: string) => ({
+    task: "ask_witness" as const,
+    prompt_version: "kw.test-template@1",
+    schema_version: "kw.test@1",
+    schema_name: "kw_test_v1",
+    json_schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"], additionalProperties: false },
+    build: (b: EvidenceBundle) => [
+      { role: "system" as const, content: "test" },
+      { role: "user" as const, content: `${question}\n${b.sha256}` },
+    ],
+  });
+  const validate = (raw: unknown) =>
+    typeof (raw as { answer?: unknown })?.answer === "string" ? { ok: true as const, value: raw as { answer: string } } : { ok: false as const, errors: ["answer missing"] };
+
+  it("keys the cache by cacheVariant so different questions over one bundle never share an answer", async () => {
+    const { transport, requests } = fakeTransport((_req, n) => completion({ answer: `a${n}` }));
+    const p = new AiAndProvider({ apiKey: TEST_KEY, timeoutMs: 200 }, { transport, cache: createCache({ dir: null }), sleep: async () => {}, random: () => 0.5 });
+    const b = bundle();
+    const r1 = await p.runTemplate(tplFor("q1"), b, validate, { cacheVariant: sha256("q1") });
+    const r2 = await p.runTemplate(tplFor("q2"), b, validate, { cacheVariant: sha256("q2") });
+    const r1again = await p.runTemplate(tplFor("q1"), b, validate, { cacheVariant: sha256("q1") });
+    expect(r1.status === "ok" && r1.value.answer).toBe("a1");
+    expect(r2.status === "ok" && r2.value.answer).toBe("a2");
+    expect(r1again.status === "ok" && r1again.value.answer).toBe("a1");
+    expect(r1again.meta.cache_hit).toBe(true);
+    expect(requests).toHaveLength(2);
+  });
+
+  it("is unavailable (no network) on the NullProvider", async () => {
+    const r = await new NullProvider().runTemplate(tplFor("q"), bundle(), validate);
+    expect(r.status).toBe("unavailable");
+  });
+});

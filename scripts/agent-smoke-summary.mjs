@@ -39,6 +39,14 @@ export function parsePreflight(text) {
   const p10 = val('P10');
   const p11 = val('P11');
   const p12 = val('P12');
+  const p13 = val('P13');
+  const p14 = val('P14');
+  const p15 = val('P15');
+  const p16 = val('P16');
+  const httpOf = (v) => {
+    const m = v && /http=(\d{3})/.exec(v);
+    return m ? m[1] : null;
+  };
   const mounts = (() => {
     const i = text.indexOf('P6 mounts:');
     if (i < 0) return null;
@@ -52,12 +60,17 @@ export function parsePreflight(text) {
     policy_dropin_dir_not_writable: mk('P4', p4 === 'denied', p4),
     hook_forwarder_not_writable: mk('P5', p5 === 'denied', p5),
     policy_mount_read_only: { pass: roMount('/etc/claude-code'), observed: mounts },
-    proxy_allows_allowlisted: mk('P7', connectOf(p7) === '200', p7),
+    // Credential broker remediation: the agent has NO direct route to the Claude API.
+    proxy_denies_api_direct: mk('P7', connectOf(p7) === '403', p7),
     proxy_denies_non_allowlisted: mk('P8', connectOf(p8) === '403', p8),
     proxy_denies_non_443_connect: mk('P9', connectOf(p9) === '403', p9),
     no_direct_https_without_proxy: mk('P10', exitOf(p10) !== null && exitOf(p10) !== 0, p10),
     no_direct_tcp: mk('P11', exitOf(p11) !== null && exitOf(p11) !== 0, p11),
     no_external_dns: mk('P12', exitOf(p12) !== null && exitOf(p12) !== 0, p12),
+    broker_denies_non_allowlisted_path: mk('P13', httpOf(p13) === '403', p13),
+    broker_denies_bad_run_credential: mk('P14', httpOf(p14) === '401', p14),
+    broker_is_not_a_forward_proxy: mk('P15', p15 !== null && httpOf(p15) !== '200' && /connect=(000|4\d\d|5\d\d)|exit=[1-9]/.test(p15), p15),
+    agent_env_has_only_placeholder_credential: mk('P16', p16 === 'oauth=placeholder api_key=unset auth_token=unset base_url=http://kw-llm-broker:8080', p16),
   };
 }
 
@@ -139,6 +152,25 @@ export function workspaceChange(before, after, diffText) {
   return { changed: before !== after, diff_lines: diffText.split('\n').filter((l) => /^[<>] /.test(l)).length };
 }
 
+/** Summarize the broker's metadata-only JSON log lines (docker/llm-broker/broker.mjs). */
+export function parseBrokerLog(text) {
+  const byDecision = {};
+  const requests = [];
+  let listening = false;
+  for (const l of text.split('\n')) {
+    const i = l.indexOf('{');
+    if (i < 0) continue;
+    let o;
+    try { o = JSON.parse(l.slice(i)); } catch { continue; }
+    if (o.kw !== 'llm-broker') continue;
+    if (o.event === 'listening') { listening = true; continue; }
+    if (!o.decision) continue;
+    byDecision[o.decision] = (byDecision[o.decision] ?? 0) + 1;
+    requests.push(`${o.method} ${o.path} ${o.status} ${o.decision}`);
+  }
+  return { listening, by_decision: byDecision, requests };
+}
+
 export function parseHooks(text) {
   const events = {};
   let lines = 0;
@@ -174,6 +206,11 @@ export function summarize(dir, mode, agentExit, tokenScan, name) {
   const proxyPath = join(dir, 'egress-proxy.log');
   const egress = splitProxyPhases(existsSync(proxyPath) ? readFileSync(proxyPath) : Buffer.alloc(0), read(join(dir, 'egress-proxy.phases.txt')));
   const proxy = egress.agent_run ?? egress.all;
+  const brokerLog = read(join(dir, 'llm-broker.log'));
+  const brokerAgentRun = (() => {
+    const m = /agent_run_start_byte=(\d+)/.exec(read(join(dir, 'llm-broker.phases.txt')));
+    return m ? parseBrokerLog(Buffer.from(brokerLog, 'utf8').subarray(Number(m[1])).toString('utf8')) : null;
+  })();
   const ws = workspaceChange(read(join(dir, 'workspace-before.sha256')), read(join(dir, 'workspace-after.sha256')), read(join(dir, 'workspace-diff.txt')));
   const secretHits = walk(dir)
     .filter((p) => !p.includes(`${join(dir, 'inputs')}`) && !p.endsWith('.tar'))
@@ -196,12 +233,14 @@ export function summarize(dir, mode, agentExit, tokenScan, name) {
     // agent_run = proxy lines after the host-recorded offset (agent phase only);
     // preflight = host-initiated probe traffic (incl. the deliberate example.com / :22 denials).
     egress,
+    // The agent's only route to the Claude API; it holds the real credential, the agent holds a per-run placeholder.
+    credential_broker: { all: parseBrokerLog(brokerLog), agent_run: brokerAgentRun },
     synthetic_secret_present_in: secretHits,
     workspace_changed: ws.changed,
     workspace_change: ws,
     counts: { stream_events: Object.values(stream.byType).reduce((a, b) => a + b, 0), hook_lines: hooks.lines, proxy_scope: egress.agent_run ? 'agent_run' : 'all_phases (no phase offset)', proxy_requests: proxy.requests.length, proxy_established: proxy.established.length, proxy_refused: proxy.refused.length },
     provenance: {
-      authoritative_host_captured: ['egress-proxy.log', 'egress-proxy.phases.txt', 'container-diff.txt', 'workspace-before.sha256', 'workspace-after.sha256', 'workspace-after.tar', 'agent-stdout.stream.jsonl (host-captured bytes; content is agent-reported)'],
+      authoritative_host_captured: ['egress-proxy.log', 'egress-proxy.phases.txt', 'llm-broker.log', 'llm-broker.phases.txt', 'inspect-agent.json', 'inspect-broker.json', 'container-diff.txt', 'workspace-before.sha256', 'workspace-after.sha256', 'workspace-after.tar', 'agent-stdout.stream.jsonl (host-captured bytes; content is agent-reported)'],
       host_probe_observed: ['preflight.txt (host-chosen probe script run in the agent image before the agent starts)', 'conformance.txt / conformance.stream.jsonl (claude with probe repo settings, no network, no credentials)'],
       agent_reported: ['hooks.agent-reported.ndjson (agent can write the spool)', 'transcript.agent-reported.jsonl', 'agent-stdout.stream.jsonl content (incl. --include-hook-events lifecycle events)'],
     },
