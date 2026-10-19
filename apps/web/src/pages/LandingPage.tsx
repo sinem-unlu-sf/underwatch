@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { BUILT_WITH, FEATURES, FIXTURE_DEMO_HREF, HERO_SHOT, LANDING_ONLY, LIVE_DEMO_HREF, REPO_HREF, STEPS, type LandingShot } from "../components/landing/landingContent";
+import { BetaSignupForm } from "../components/landing/BetaSignupForm";
+import { BETA_CTA, BETA_HREF, BUILT_WITH, FEATURES, FIXTURE_DEMO_HREF, HERO_SHOT, LANDING_ONLY, LIVE_DEMO_HREF, STEPS, type LandingShot } from "../components/landing/landingContent";
 import { LogoMark } from "../components/shell/nav";
 
 /**
  * Public landing page at "/" (rendered without the app shell). Every CTA goes to a real route:
  * /signup, /login, /overview (the app) and a real finding for the live demo. The static landing-only build
- * (LANDING_ONLY) has none of those routes, so its CTAs point to the repository instead.
+ * (LANDING_ONLY) has none of those routes, so its CTAs lead to the beta sign-up form in the final section instead.
  */
 export function LandingPage() {
   useEffect(() => {
@@ -55,8 +56,8 @@ function LandingNav() {
           {!LANDING_ONLY && <Link to="/overview" className="hover:text-text">Open the app</Link>}
         </nav>
         {LANDING_ONLY ? (
-          <a href={REPO_HREF} className="inline-flex h-8 items-center rounded-md bg-[#EDEDF0] px-3 text-[13px] font-medium text-[#09090B] hover:bg-white">
-            View on GitHub
+          <a href={BETA_HREF} className="inline-flex h-8 items-center rounded-md bg-[#EDEDF0] px-3 text-[13px] font-medium text-[#09090B] hover:bg-white">
+            {BETA_CTA}
           </a>
         ) : (
         <div className="flex items-center gap-2">
@@ -161,14 +162,19 @@ function Hero() {
         <div className={`${wrap} pb-16 pt-4`}>
           <Reveal className="flex flex-col items-center text-center">
         {LANDING_ONLY ? (
+          <>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <a href={REPO_HREF} className={ctaPrimary}>
-              View on GitHub
+            <a href={BETA_HREF} className={ctaPrimary}>
+              {BETA_CTA}
             </a>
             <a href="#how-it-works" className={ctaSecondary}>
               How it works
             </a>
           </div>
+          <p className="mt-3 text-[12px] text-text-tertiary">
+            For individuals and companies. We will email you as soon as the beta opens.
+          </p>
+          </>
         ) : (
         <>
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -273,7 +279,7 @@ function BuiltWith() {
 
 function FinalCta() {
   return (
-    <section aria-labelledby="final-cta-title" className="relative overflow-hidden border-t border-border">
+    <section id={LANDING_ONLY ? "beta" : undefined} aria-labelledby="final-cta-title" className="relative scroll-mt-16 overflow-hidden border-t border-border">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
@@ -283,13 +289,10 @@ function FinalCta() {
         <h2 id="final-cta-title" className="mx-auto max-w-[720px] text-[30px] font-semibold leading-tight tracking-[-0.02em] sm:text-[40px]">
           Don't just trust what your coding agent says it did.
         </h2>
+        {LANDING_ONLY ? (
+          <BetaSignupForm />
+        ) : (
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          {LANDING_ONLY ? (
-            <a href={REPO_HREF} className={ctaPrimary}>
-              View on GitHub
-            </a>
-          ) : (
-          <>
           <Link to="/signup" className={ctaPrimary}>
             Sign up
           </Link>
@@ -299,9 +302,8 @@ function FinalCta() {
           <Link to="/overview" className={ctaSecondary}>
             Open the app
           </Link>
-          </>
-          )}
         </div>
+        )}
       </div>
     </section>
   );
@@ -317,7 +319,11 @@ function LandingFooter() {
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
           {LANDING_ONLY ? (
-            <a href={REPO_HREF} className="hover:text-text">GitHub</a>
+            <>
+            <a href="#features" className="hover:text-text">Product</a>
+            <a href="#how-it-works" className="hover:text-text">How it works</a>
+            <a href={BETA_HREF} className="hover:text-text">{BETA_CTA}</a>
+            </>
           ) : (
           <>
           <Link to="/overview" className="hover:text-text">Overview</Link>

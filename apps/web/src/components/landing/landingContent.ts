@@ -13,10 +13,11 @@ export const FIXTURE_DEMO_HREF = `/findings/${FIXTURE_DEMO_FINDING_ID}`;
 
 /**
  * Static landing-only build (`pnpm build:landing`, deployed to Vercel): no API server or app routes behind it, so
- * the page links to the repository instead of sign-up, the app and the demos.
+ * the CTAs that would go to sign-up, the app and the demos lead to the beta sign-up form instead.
  */
 export const LANDING_ONLY = import.meta.env.VITE_LANDING_ONLY === "1";
-export const REPO_HREF = "https://github.com/thehephaistos/underwatch";
+export const BETA_CTA = "Join the beta";
+export const BETA_HREF = "#beta";
 
 export type LandingShot ={ src: string; alt: string; caption: string; width: number; height: number };
 
