@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { BUILT_WITH, FEATURES, FIXTURE_DEMO_HREF, HERO_SHOT, LIVE_DEMO_HREF, STEPS, type LandingShot } from "../components/landing/landingContent";
+import { BUILT_WITH, FEATURES, FIXTURE_DEMO_HREF, HERO_SHOT, LANDING_ONLY, LIVE_DEMO_HREF, REPO_HREF, STEPS, type LandingShot } from "../components/landing/landingContent";
 import { LogoMark } from "../components/shell/nav";
 
 /**
  * Public landing page at "/" (rendered without the app shell). Every CTA goes to a real route:
- * /signup, /login, /overview (the app) and a real finding for the live demo.
+ * /signup, /login, /overview (the app) and a real finding for the live demo. The static landing-only build
+ * (LANDING_ONLY) has none of those routes, so its CTAs point to the repository instead.
  */
 export function LandingPage() {
   useEffect(() => {
@@ -51,8 +52,13 @@ function LandingNav() {
         <nav aria-label="Landing" className="hidden items-center gap-6 text-[13px] text-text-secondary md:flex">
           <a href="#features" className="hover:text-text">Product</a>
           <a href="#how-it-works" className="hover:text-text">How it works</a>
-          <Link to="/overview" className="hover:text-text">Open the app</Link>
+          {!LANDING_ONLY && <Link to="/overview" className="hover:text-text">Open the app</Link>}
         </nav>
+        {LANDING_ONLY ? (
+          <a href={REPO_HREF} className="inline-flex h-8 items-center rounded-md bg-[#EDEDF0] px-3 text-[13px] font-medium text-[#09090B] hover:bg-white">
+            View on GitHub
+          </a>
+        ) : (
         <div className="flex items-center gap-2">
           <Link to="/login" className="inline-flex h-8 items-center rounded-md px-3 text-[13px] text-text-secondary hover:text-text">
             Log in
@@ -61,6 +67,7 @@ function LandingNav() {
             Sign up
           </Link>
         </div>
+        )}
       </div>
     </header>
   );
@@ -153,6 +160,17 @@ function Hero() {
       <section aria-label="Get started" className="relative">
         <div className={`${wrap} pb-16 pt-4`}>
           <Reveal className="flex flex-col items-center text-center">
+        {LANDING_ONLY ? (
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <a href={REPO_HREF} className={ctaPrimary}>
+              View on GitHub
+            </a>
+            <a href="#how-it-works" className={ctaSecondary}>
+              How it works
+            </a>
+          </div>
+        ) : (
+        <>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link to="/signup" className={ctaPrimary}>
             Sign up
@@ -174,6 +192,8 @@ function Hero() {
           </Link>
           .
         </p>
+        </>
+        )}
           </Reveal>
           <Reveal>
             <Shot shot={HERO_SHOT} className="mt-14 sm:mt-16" />
@@ -264,6 +284,12 @@ function FinalCta() {
           Don't just trust what your coding agent says it did.
         </h2>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
+          {LANDING_ONLY ? (
+            <a href={REPO_HREF} className={ctaPrimary}>
+              View on GitHub
+            </a>
+          ) : (
+          <>
           <Link to="/signup" className={ctaPrimary}>
             Sign up
           </Link>
@@ -273,6 +299,8 @@ function FinalCta() {
           <Link to="/overview" className={ctaSecondary}>
             Open the app
           </Link>
+          </>
+          )}
         </div>
       </div>
     </section>
@@ -288,12 +316,18 @@ function LandingFooter() {
           <span>Underwatch</span>
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
+          {LANDING_ONLY ? (
+            <a href={REPO_HREF} className="hover:text-text">GitHub</a>
+          ) : (
+          <>
           <Link to="/overview" className="hover:text-text">Overview</Link>
           <Link to="/findings" className="hover:text-text">Findings</Link>
           <Link to="/runs" className="hover:text-text">Agent Runs</Link>
           <Link to="/safeguards" className="hover:text-text">Safeguards</Link>
           <Link to="/login" className="hover:text-text">Log in</Link>
           <Link to="/signup" className="hover:text-text">Sign up</Link>
+          </>
+          )}
         </nav>
       </div>
     </footer>

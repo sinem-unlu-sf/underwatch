@@ -11,7 +11,14 @@ export const FIXTURE_DEMO_FINDING_ID = "fnd_fx04_env_read_via_bash";
 export const LIVE_DEMO_HREF = `/findings/${LIVE_DEMO_FINDING_ID}`;
 export const FIXTURE_DEMO_HREF = `/findings/${FIXTURE_DEMO_FINDING_ID}`;
 
-export type LandingShot = { src: string; alt: string; caption: string; width: number; height: number };
+/**
+ * Static landing-only build (`pnpm build:landing`, deployed to Vercel): no API server or app routes behind it, so
+ * the page links to the repository instead of sign-up, the app and the demos.
+ */
+export const LANDING_ONLY = import.meta.env.VITE_LANDING_ONLY === "1";
+export const REPO_HREF = "https://github.com/thehephaistos/underwatch";
+
+export type LandingShot ={ src: string; alt: string; caption: string; width: number; height: number };
 
 export const HERO_SHOT: LandingShot = {
   src: "/landing/hero-finding.webp",
